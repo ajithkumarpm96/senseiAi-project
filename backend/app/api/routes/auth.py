@@ -16,6 +16,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from jose import jwt
 from passlib.context import CryptContext
+import passlib.handlers.bcrypt
+
+# Workaround for bcrypt >= 4.1.0 compatibility with passlib's internal wrap test
+try:
+    passlib.handlers.bcrypt.detect_wrap_bug = lambda *args, **kwargs: False
+except Exception:
+    pass
+
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.db_models import User
