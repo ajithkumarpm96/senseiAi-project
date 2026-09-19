@@ -86,7 +86,10 @@ export function useChat(projectId, chapterId) {
     abortControllerRef.current = new AbortController()
 
     try {
-      const response = await fetch('/api/chat/stream', {
+      const rawBase = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
+      const streamUrl = rawBase ? `${rawBase}/api/chat/stream` : '/api/chat/stream'
+
+      const response = await fetch(streamUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
