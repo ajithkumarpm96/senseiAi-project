@@ -1,0 +1,26 @@
+# Environments & Secrets
+.env
+.env.*
+!.env.example
+.venv/
+
+# Python / Backend
+backend/venv/
+__pycache__/
+*.py[cod]
+backend/sensei.db
+backend/*.db
+
+# Frontend / Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Archives
+*.zip
