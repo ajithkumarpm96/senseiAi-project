@@ -11,7 +11,14 @@ Concepts for your learning:
    Uses DuckDuckGo so it requires $0.00 and no external API key!
 """
 from langchain_core.tools import tool
-from ddgs import DDGS
+
+try:
+    from duckduckgo_search import DDGS
+except ImportError:
+    try:
+        from ddgs import DDGS
+    except ImportError:
+        DDGS = None
 
 
 @tool
@@ -22,6 +29,8 @@ def duckduckgo_search(query: str) -> str:
     Use this tool when you need to verify modern facts or when the user asks about recent versions.
     """
     try:
+        if DDGS is None:
+            return f"Search is currently unavailable in this environment."
         results = list(DDGS().text(query, max_results=3))
         if not results:
             return f"No relevant web search results found for query: '{query}'."
