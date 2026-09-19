@@ -19,11 +19,10 @@ import axios from 'axios'
 import { useAppStore } from '../store/appStore'
 
 // Create an axios instance with our base config
-// All requests will go to /api/... which Vite proxies to http://localhost:8000
+const rawBase = (import.meta.env.VITE_API_URL || '').trim().replace(/\/+$/, '')
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL
-    ? `${import.meta.env.VITE_API_URL}/api`
-    : '/api',
+  baseURL: rawBase ? `${rawBase}/api` : '/api',
   headers: {
     'Content-Type': 'application/json',
   },
