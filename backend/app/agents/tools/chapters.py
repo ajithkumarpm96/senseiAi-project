@@ -89,20 +89,47 @@ def verify_and_refine_curriculum(core: list, optional: list, topic_title: str) -
     }
 
 
-async def generate_chapters_for_project(topic_title: str, topic_description: str = "", theme: str = "anime") -> dict:
+async def generate_chapters_for_project(
+    topic_title: str,
+    topic_description: str = "",
+    theme: str = "anime",
+    difficulty_level: str = "beginner"
+) -> dict:
     """
-    Analyzes a subject and returns a deterministic, verified roadmap with:
+    Analyzes a subject and returns a deterministic, verified roadmap calibrated to the user's knowledge level:
     - 4 to 6 core/mandatory chapters (clean, professional technical names)
     - 4 to 6 optional/elective chapters
     
-    Pop-culture analogies and themes are used exclusively by Sensei in the chat explanations,
-    keeping the syllabus clean, readable, and professional.
+    Difficulty calibration:
+    - 'beginner': Starts at absolute zero, essential fundamentals, core building blocks, zero assumed jargon.
+    - 'intermediate': Skips trivial syntax; focuses on real-world patterns, architecture, and idiomatic practices.
+    - 'advanced': Dives straight into engine/memory internals, concurrency, performance tuning, and edge cases.
     """
     # Use temperature=0.0 for consistent, reproducible curriculum generation
     llm = get_llm(temperature=0.0, streaming=False)
 
-    system_prompt = """You are a Principal Curriculum Architect and Technical Director.
+    level_key = (difficulty_level or "beginner").lower().strip()
+    if level_key == "intermediate":
+        level_guidelines = """TARGET KNOWLEDGE LEVEL: INTERMEDIATE
+- Assume student already knows basic syntax, commands, and simple usage.
+- DO NOT start with 'Introduction to...' or basic installation.
+- Chapter 1 MUST begin with practical patterns, modular architecture, or idiomatic core techniques.
+- Progress to production workflows, API integration, state management, and real-world system patterns."""
+    elif level_key == "advanced":
+        level_guidelines = """TARGET KNOWLEDGE LEVEL: ADVANCED / EXPERT
+- The student is a professional engineer. DO NOT waste time on basics or common patterns.
+- Chapter 1 MUST dive straight into runtime internals, memory layout, compilation/execution mechanics, or concurrency.
+- Progress through low-level performance profiling, distributed edge cases, security hardening, and deep architectural trade-offs."""
+    else:
+        level_guidelines = """TARGET KNOWLEDGE LEVEL: BEGINNER (Default — Zero Assumed Knowledge)
+- Assume student has zero prior knowledge or is learning this topic for the first time.
+- Chapter 1 MUST begin with the absolute foundation, core mental model, and fundamental syntax/building blocks.
+- Build up step-by-step progressively without steep difficulty spikes."""
+
+    system_prompt = f"""You are a Principal Curriculum Architect and Technical Director.
 Your task is to break down the given study topic into a progressive, crystal-clear, industry-standard syllabus.
+
+{level_guidelines}
 
 CRITICAL RULES FOR CHAPTER TITLES:
 1. Output REAL, CONCISE technical topic names (e.g. "Variables & Data Types", "Functions & Scope", "DOM Manipulation", "Promises & Async/Await", "Classes & OOP").
@@ -111,18 +138,19 @@ CRITICAL RULES FOR CHAPTER TITLES:
 4. Keep each title punchy and readable: between 2 and 6 words.
 
 Divide into two tiers:
-1. "core_chapters": 4 to 6 ESSENTIAL progressive milestones in standard logical learning order (from fundamentals to mastery).
+1. "core_chapters": 4 to 6 ESSENTIAL progressive milestones in standard logical learning order (calibrated to the target knowledge level).
 2. "optional_chapters": 4 to 6 valuable elective topics, deep dives, or practical extensions.
 
 Output ONLY valid JSON with this exact schema (no markdown, no conversational commentary):
-{
+{{
   "core_chapters": ["Core Topic 1", "Core Topic 2", "Core Topic 3", "Core Topic 4", "Core Topic 5"],
   "optional_chapters": ["Elective Topic 1", "Elective Topic 2", "Elective Topic 3", "Elective Topic 4"]
-}
+}}
 """
 
     user_prompt = f"""Topic: {topic_title}
-Context / Description: {topic_description or 'Mastering this subject from core to advanced'}
+Context / Description: {topic_description or 'Mastering this subject'}
+Knowledge Level: {level_key.capitalize()}
 
 Generate the core and optional chapters in pure JSON:"""
 

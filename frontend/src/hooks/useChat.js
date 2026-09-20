@@ -11,20 +11,72 @@ import { useAppStore } from '../store/appStore'
  * 2. Token Assembly: As chunks stream in, we update the last AI message state,
  *    triggering a smooth word-by-word typing effect in React!
  */
-export function useChat(projectId, chapterId) {
-  const [messages, setMessages] = useState([])
+export function useChat(projectId, chapterId, initialMessages = null, ready = true, onSyllabusGenerated = null) {
+  const [messages, setMessages] = useState(initialMessages || [])
   const [isStreaming, setIsStreaming] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(initialMessages === null)
   const [error, setError] = useState(null)
   
   const token = useAppStore((state) => state.token)
   const theme = useAppStore((state) => state.theme)
   const abortControllerRef = useRef(null)
   const currentChapterIdRef = useRef(chapterId)
+  const autoAssignedChapterRef = useRef(null)
+  const hasUsedInitialMessagesRef = useRef(false)
+  const prevChapterIdRef = useRef(chapterId)
+  const prevProjectIdRef = useRef(projectId)
+
+  // Synchronously adopt initialMessages during render if provided after initial mount
+  const [prevInitialMessages, setPrevInitialMessages] = useState(initialMessages)
+  if (initialMessages !== prevInitialMessages) {
+    setPrevInitialMessages(initialMessages)
+    if (initialMessages !== null) {
+      setMessages(initialMessages)
+      setIsLoadingHistory(false)
+    }
+  }
+
+  // Synchronously enter loading state if chapter or project changes
+  const [prevChapterId, setPrevChapterId] = useState(chapterId)
+  const [prevProjectId, setPrevProjectId] = useState(projectId)
+  if (chapterId !== prevChapterId || projectId !== prevProjectId) {
+    const isAutoAssigned = autoAssignedChapterRef.current && String(chapterId) === String(autoAssignedChapterRef.current)
+    const isInitialChapterAssignment = !prevChapterId && chapterId && projectId === prevProjectId
+    setPrevChapterId(chapterId)
+    setPrevProjectId(projectId)
+    // Only blank messages if switching between distinct existing chapters or switching projects
+    if (ready && !isInitialChapterAssignment && !isAutoAssigned) {
+      setIsLoadingHistory(true)
+      setMessages([])
+    }
+  }
 
   // 1. Load chat history when project or chapter changes
   useEffect(() => {
+    // If this chapter change was caused by auto-assigning the syllabus during our active chat, don't abort or reload!
+    if (autoAssignedChapterRef.current && String(chapterId) === String(autoAssignedChapterRef.current)) {
+      autoAssignedChapterRef.current = null
+      prevChapterIdRef.current = chapterId
+      currentChapterIdRef.current = chapterId
+      return
+    }
+
+    const isInitialChapterAssignment = (!prevChapterIdRef.current || prevChapterIdRef.current === 'undefined') && chapterId && prevProjectIdRef.current === projectId
+    prevChapterIdRef.current = chapterId
+    prevProjectIdRef.current = projectId
     currentChapterIdRef.current = chapterId
-    if (!projectId) return
+    if (!projectId || !ready) return
+
+    // If this was an initial chapter assignment for an in-progress or active chat, preserve messages
+    if (isInitialChapterAssignment && (isStreaming || messages.length > 0)) {
+      return
+    }
+
+    // If initialMessages was provided for this initial chapter, use it once and skip duplicate fetch
+    if (!hasUsedInitialMessagesRef.current && initialMessages !== null) {
+      hasUsedInitialMessagesRef.current = true
+      return
+    }
 
     // If an active stream exists when changing chapters, abort it
     if (abortControllerRef.current) {
@@ -33,13 +85,15 @@ export function useChat(projectId, chapterId) {
     }
     setIsStreaming(false)
     setError(null)
+    setIsLoadingHistory(true)
     setMessages([])
 
     loadHistory(projectId, chapterId)
-  }, [projectId, chapterId])
+  }, [projectId, chapterId, ready])
 
   const loadHistory = async (pId = projectId, cId = chapterId) => {
     if (!pId) return
+    setIsLoadingHistory(true)
     try {
       const url = cId
         ? `/chat/history/${pId}?chapter_id=${cId}`
@@ -51,16 +105,27 @@ export function useChat(projectId, chapterId) {
       }
     } catch (err) {
       console.error('Failed to load chat history', err)
+    } finally {
+      if (currentChapterIdRef.current === cId) {
+        setIsLoadingHistory(false)
+      }
     }
   }
 
   // 2. Send message and stream the response
-  const sendMessage = async (userPrompt, mood = 'focused', studyMode = 'chill', targetAgent = null) => {
+  const sendMessage = async (
+    userPrompt,
+    mood = 'focused',
+    studyMode = 'chill',
+    targetAgent = null,
+    difficultyLevel = 'beginner'
+  ) => {
     if (!userPrompt || typeof userPrompt !== 'string' || !userPrompt.trim() || isStreaming) return
 
     const safeMood = typeof mood === 'string' ? mood : 'focused'
     const safeStudyMode = typeof studyMode === 'string' ? studyMode : 'chill'
     const safeTargetAgent = typeof targetAgent === 'string' ? targetAgent : null
+    const safeDifficulty = typeof difficultyLevel === 'string' ? difficultyLevel : 'beginner'
 
     setError(null)
     const userMessage = {
@@ -102,6 +167,7 @@ export function useChat(projectId, chapterId) {
           mood: safeMood,
           theme: theme,
           study_mode: safeStudyMode,
+          difficulty_level: safeDifficulty,
           target_agent: safeTargetAgent
         }),
         signal: abortControllerRef.current.signal
@@ -133,8 +199,23 @@ export function useChat(projectId, chapterId) {
             try {
               const parsed = JSON.parse(rawData)
 
+              // -1. Syllabus generated automatically on first chat
+              if (parsed.type === 'syllabus_generated') {
+                if (parsed.selected_chapter_id) {
+                  autoAssignedChapterRef.current = parsed.selected_chapter_id
+                  currentChapterIdRef.current = parsed.selected_chapter_id
+                }
+                if (onSyllabusGenerated) {
+                  onSyllabusGenerated({
+                    coreChapters: parsed.core_chapters || [],
+                    optionalChapters: parsed.optional_chapters || [],
+                    selectedChapterId: parsed.selected_chapter_id
+                  })
+                }
+              }
+
               // 0. Agent routing switch (e.g. Challenger or Hype agent stepped in)
-              if (parsed.type === 'agent_switch' && parsed.agent) {
+              else if (parsed.type === 'agent_switch' && parsed.agent) {
                 activeRole = parsed.agent
                 updateAiMessage(accumulatedText, activeSteps, activeRole)
               }
@@ -175,9 +256,7 @@ export function useChat(projectId, chapterId) {
               }
               // 6. Error event
               else if (parsed.type === 'error') {
-                if (currentChapterIdRef.current === chapterId) {
-                  setError(parsed.content)
-                }
+                setError(parsed.content)
               }
             } catch (e) {
               // Ignore partial JSON chunks
@@ -199,7 +278,6 @@ export function useChat(projectId, chapterId) {
   // Helper to update the active AI message in state
   const updateAiMessage = (content, steps, role) => {
     setMessages((prev) => {
-      if (currentChapterIdRef.current !== chapterId) return prev
       const updated = [...prev]
       const lastIndex = updated.length - 1
       if (lastIndex >= 0) {
@@ -234,6 +312,7 @@ export function useChat(projectId, chapterId) {
   return {
     messages,
     isStreaming,
+    isLoadingHistory,
     error,
     sendMessage,
     requestChallenge,

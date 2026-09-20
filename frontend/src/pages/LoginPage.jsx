@@ -199,12 +199,9 @@ export default function LoginPage() {
               className="w-full h-12 rounded-xl bg-[#6c8cff] hover:bg-[#809cff] active:scale-[0.98] text-[#001e60] font-semibold text-sm sm:text-base flex items-center justify-center gap-2 shadow-lg shadow-[#6c8cff]/20 transition-all focus:outline-none focus:ring-2 focus:ring-[#6c8cff] disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed mt-2 select-none"
             >
               {loading ? (
-                <>
-                  <span className="material-symbols-outlined text-[18px] animate-spin">
-                    progress_activity
-                  </span>
-                  <span>Opening calm space...</span>
-                </>
+                <span className="material-symbols-outlined text-[20px] animate-spin">
+                  progress_activity
+                </span>
               ) : (
                 <>
                   <span>{isRegister ? 'Create Account' : 'Enter Calm Space'}</span>

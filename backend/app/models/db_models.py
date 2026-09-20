@@ -36,11 +36,12 @@ class Project(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String(200), nullable=False)  # e.g. "Learn JavaScript"
     description = Column(Text, default="")
+    difficulty_level = Column(String(20), default="beginner")  # beginner | intermediate | advanced
     created_at = Column(DateTime, server_default=func.now())
     
     owner = relationship("User", back_populates="projects")
-    chapters = relationship("Chapter", back_populates="project", order_by="Chapter.order_num")
-    conversations = relationship("Conversation", back_populates="project")
+    chapters = relationship("Chapter", back_populates="project", order_by="Chapter.order_num", cascade="all, delete-orphan")
+    conversations = relationship("Conversation", back_populates="project", cascade="all, delete-orphan")
 
 
 class Chapter(Base):
@@ -55,7 +56,7 @@ class Chapter(Base):
     ai_generated = Column(Boolean, default=False)
     
     project = relationship("Project", back_populates="chapters")
-    conversations = relationship("Conversation", back_populates="chapter")
+    conversations = relationship("Conversation", back_populates="chapter", cascade="all, delete-orphan")
 
 
 class Conversation(Base):
@@ -70,7 +71,7 @@ class Conversation(Base):
     
     project = relationship("Project", back_populates="conversations")
     chapter = relationship("Chapter", back_populates="conversations")
-    messages = relationship("Message", back_populates="conversation", order_by="Message.created_at")
+    messages = relationship("Message", back_populates="conversation", order_by="Message.created_at", cascade="all, delete-orphan")
 
 
 class Message(Base):

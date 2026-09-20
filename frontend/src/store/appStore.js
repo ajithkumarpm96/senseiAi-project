@@ -30,9 +30,12 @@ export const useAppStore = create(
 
       // UI & Accessibility state
       theme: 'anime',        // pop culture theme: 'anime' | 'marvel' | 'harry_potter'
-      dyslexicFont: false,   // toggle OpenDyslexic font
+      dyslexicFont: true,    // toggle OpenDyslexic font (default ON)
       textScale: 'normal',   // 'normal' | 'large'
       softView: false,       // low-contrast calm mode
+      bionicReading: false,  // Bionic reading (bold first half of words)
+      focusedParagraphId: null, // ID of currently focused paragraph for focus dimmer
+      parkedThoughts: [],    // Array of { id, text, topic, createdAt }
 
       // Actions (functions that update state)
       setToken: (token) => set({ token }),
@@ -44,19 +47,56 @@ export const useAppStore = create(
       toggleTextScale: () => set((state) => ({ textScale: state.textScale === 'normal' ? 'large' : 'normal' })),
       setSoftView: (softView) => set({ softView }),
       toggleSoftView: () => set((state) => ({ softView: !state.softView })),
+      setBionicReading: (bionicReading) => set({ bionicReading }),
+      toggleBionicReading: () => set((state) => ({ bionicReading: !state.bionicReading })),
+      setFocusedParagraphId: (focusedParagraphId) => set({ focusedParagraphId }),
+
+      // Parked thoughts actions
+      addParkedThought: (text, topic = 'General') => {
+        const item = {
+          id: 'thought_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          text: (text || '').trim(),
+          topic: topic || 'General',
+          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }
+        set((state) => ({
+          parkedThoughts: [item, ...(state.parkedThoughts || [])]
+        }))
+        return item
+      },
+      removeParkedThought: (id) => set((state) => ({
+        parkedThoughts: (state.parkedThoughts || []).filter((t) => t.id !== id)
+      })),
+      clearParkedThoughts: () => set({ parkedThoughts: [] }),
 
       // Logout: clears everything
       logout: () => set({ token: null, user: null }),
     }),
     {
       name: 'sensei-ai-storage', // localStorage key
+      version: 4,
+      migrate: (persistedState, version) => {
+        let state = { ...persistedState }
+        if (!version || version < 2) {
+          state.dyslexicFont = true
+        }
+        if (!version || version < 3) {
+          state.bionicReading = false
+        }
+        if (!version || version < 4) {
+          state.parkedThoughts = state.parkedThoughts || []
+        }
+        return state
+      },
       partialize: (state) => ({ 
         token: state.token, 
         user: state.user, 
         theme: state.theme,
         dyslexicFont: state.dyslexicFont,
         textScale: state.textScale,
-        softView: state.softView
+        softView: state.softView,
+        bionicReading: state.bionicReading,
+        parkedThoughts: state.parkedThoughts
       }),
     }
   )

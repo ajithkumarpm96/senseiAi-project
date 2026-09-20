@@ -1,11 +1,14 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../../api/client'
 import { useAppStore } from '../../store/appStore'
+import SenseiLoader from '../common/SenseiLoader'
 
 export default function ResumingDashboard({ 
   projects = [], 
   activeProjectId,
+  initialChapters = [],
+  initialProgress = null,
   onSelectProject,
   onOpenNewModal, 
   onDeleteProject,
@@ -18,15 +21,20 @@ export default function ResumingDashboard({
   const activeProject = projects.find((p) => p.id === activeProjectId) || projects[0]
   const otherProjects = projects.filter((p) => p.id !== activeProject?.id)
 
-  const [progressData, setProgressData] = useState(null)
-  const [chapters, setChapters] = useState([])
+  const [progressData, setProgressData] = useState(initialProgress)
+  const [chapters, setChapters] = useState(initialChapters)
   const [loadingProgress, setLoadingProgress] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
   const [showOtherPaths, setShowOtherPaths] = useState(true)
+  const loadedProjectIdRef = useRef(activeProject?.id)
 
-  // Fetch progress and chapters for currently active project
+  // Fetch progress and chapters when switching active project
   useEffect(() => {
     if (!activeProject?.id) return
+    // If the active project already matches what was loaded initially, skip redundant fetch
+    if (loadedProjectIdRef.current === activeProject.id && (chapters.length > 0 || progressData !== null)) {
+      return
+    }
     let isMounted = true
     setLoadingProgress(true)
 
@@ -36,6 +44,7 @@ export default function ResumingDashboard({
     ])
       .then(([progRes, chapRes]) => {
         if (!isMounted) return
+        loadedProjectIdRef.current = activeProject.id
         setProgressData(progRes.data)
         setChapters(Array.isArray(chapRes.data) ? chapRes.data : [])
       })
@@ -67,13 +76,13 @@ export default function ResumingDashboard({
   const currentStepNum = activeChapterIndex >= 0 ? activeChapterIndex + 1 : 1
 
   return (
-    <main className="w-full min-h-screen bg-[#161920] text-[#c8cdd8]">
+    <main className="w-full min-h-screen bg-[#13151b] text-[#c8cdd8]">
       <div className="max-w-[1000px] mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8 pb-16">
         
         {/* ========================================== */}
         {/* BLOCK 1: DYNAMIC HERO CARD (Continuously adapts to selected subject) */}
         {/* ========================================== */}
-        <section className="w-full bg-[#16181d] border border-[#2f343d] rounded-2xl p-5 sm:p-7 shadow-sm flex flex-col gap-4 relative overflow-hidden">
+        <section className="w-full bg-[#1b1e27] rounded-2xl p-5 sm:p-7 shadow-xl shadow-black/25 flex flex-col gap-4 relative overflow-hidden">
           {/* Subtle tone ambient glow */}
           <div className="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-[#6c8cff]/10 blur-3xl pointer-events-none" />
 
@@ -84,12 +93,7 @@ export default function ResumingDashboard({
                 <span className="w-2 h-2 rounded-full bg-[#5fd38d]" />
                 <span>Clean slate • Ready to start</span>
               </div>
-            ) : (
-              <div className="flex items-center gap-2 text-[#5fd38d] bg-[#183e28]/50 border border-[#5fd38d]/30 px-3 py-1 rounded-full text-xs font-semibold font-mono">
-                <span className="material-symbols-outlined text-[16px]">check_circle</span>
-                <span>Ready whenever you are • No rush</span>
-              </div>
-            )}
+            ) : <div />}
             
             <button
               type="button"
@@ -139,75 +143,83 @@ export default function ResumingDashboard({
           </div>
 
           {/* Progress Box (Continuously reflects progress or fresh step 1) */}
-          <div className="bg-[#1a1b21] border border-[#2f343d] p-4 rounded-xl flex flex-col gap-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
-              <span className="font-semibold text-[#e8eaed]">
-                {isFreshSubject 
-                  ? 'Step 1 of 4: Introduction & Mental Models'
-                  : `Step ${Math.min(completedChapters + 1, totalChapters)} of ${totalChapters}: ${currentChapter?.title || 'Active Concept Mechanics'}`}
-              </span>
-              <span className="text-[#5fd38d] font-mono font-medium">
-                {isFreshSubject ? '0% complete • ~5 mins' : `${Math.round(completionPercentage)}% complete • ~6 mins`}
-              </span>
-            </div>
+          <div className="bg-[#1a1b21] border border-[#2f343d] p-4 rounded-xl flex flex-col gap-2.5 min-h-[110px] justify-center">
+            {loadingProgress ? (
+              <div className="flex items-center justify-center py-2">
+                <SenseiLoader size={75} showText={false} />
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
+                  <span className="font-semibold text-[#e8eaed]">
+                    {isFreshSubject 
+                      ? 'Step 1 of 4: Introduction & Mental Models'
+                      : `Step ${Math.min(completedChapters + 1, totalChapters)} of ${totalChapters}: ${currentChapter?.title || 'Active Concept Mechanics'}`}
+                  </span>
+                  <span className="text-[#5fd38d] font-mono font-medium">
+                    {isFreshSubject ? '0% complete • ~5 mins' : `${Math.round(completionPercentage)}% complete • ~6 mins`}
+                  </span>
+                </div>
 
-            {/* Segmented Progress Rail */}
-            <div className="w-full h-2.5 bg-[#282a2f] rounded-full overflow-hidden flex">
-              <div 
-                className="h-full bg-[#5fd38d] rounded-full transition-all duration-500" 
-                style={{ width: `${isFreshSubject ? 8 : Math.max(15, completionPercentage)}%` }} 
-              />
-            </div>
+                {/* Segmented Progress Rail */}
+                <div className="w-full h-2.5 bg-[#282a2f] rounded-full overflow-hidden flex">
+                  <div 
+                    className="h-full bg-[#5fd38d] rounded-full transition-all duration-500" 
+                    style={{ width: `${isFreshSubject ? 8 : Math.max(15, completionPercentage)}%` }} 
+                  />
+                </div>
 
-            {/* Step Indicators */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
-              {chapters.length > 0 ? (
-                chapters.slice(0, 4).map((ch, idx) => {
-                  const isDone = ch.status === 'completed'
-                  const isCurrent = ch.id === currentChapter?.id
-                  return (
-                    <div 
-                      key={ch.id || idx}
-                      className={`flex items-center gap-1.5 truncate ${
-                        isDone 
-                          ? 'text-[#5fd38d]' 
-                          : isCurrent 
-                            ? 'text-[#6c8cff] font-semibold' 
-                            : 'text-[#9ca3af]'
-                      }`}
-                    >
-                      {isDone ? (
-                        <span className="material-symbols-outlined text-[15px]">check_circle</span>
-                      ) : isCurrent ? (
+                {/* Step Indicators */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-xs">
+                  {chapters.length > 0 ? (
+                    chapters.slice(0, 4).map((ch, idx) => {
+                      const isDone = ch.status === 'completed'
+                      const isCurrent = ch.id === currentChapter?.id
+                      return (
+                        <div 
+                          key={ch.id || idx}
+                          className={`flex items-center gap-1.5 truncate ${
+                            isDone 
+                              ? 'text-[#5fd38d]' 
+                              : isCurrent 
+                                ? 'text-[#6c8cff] font-semibold' 
+                                : 'text-[#9ca3af]'
+                          }`}
+                        >
+                          {isDone ? (
+                            <span className="material-symbols-outlined text-[15px]">check_circle</span>
+                          ) : isCurrent ? (
+                            <span className="w-2 h-2 rounded-full bg-[#6c8cff] animate-pulse shrink-0" />
+                          ) : (
+                            <span className="material-symbols-outlined text-[15px]">radio_button_unchecked</span>
+                          )}
+                          <span className="truncate">{idx + 1}. {ch.title}</span>
+                        </div>
+                      )
+                    })
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-1.5 truncate text-[#6c8cff] font-semibold">
                         <span className="w-2 h-2 rounded-full bg-[#6c8cff] animate-pulse shrink-0" />
-                      ) : (
+                        <span>1. Foundations</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 truncate text-[#9ca3af]">
                         <span className="material-symbols-outlined text-[15px]">radio_button_unchecked</span>
-                      )}
-                      <span className="truncate">{idx + 1}. {ch.title}</span>
-                    </div>
-                  )
-                })
-              ) : (
-                <>
-                  <div className="flex items-center gap-1.5 truncate text-[#6c8cff] font-semibold">
-                    <span className="w-2 h-2 rounded-full bg-[#6c8cff] animate-pulse shrink-0" />
-                    <span>1. Foundations</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 truncate text-[#9ca3af]">
-                    <span className="material-symbols-outlined text-[15px]">radio_button_unchecked</span>
-                    <span>2. Core Concept</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 truncate text-[#9ca3af]">
-                    <span className="material-symbols-outlined text-[15px]">radio_button_unchecked</span>
-                    <span>3. Practice</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 truncate text-[#9ca3af]">
-                    <span className="material-symbols-outlined text-[15px]">terminal</span>
-                    <span>4. Sandbox</span>
-                  </div>
-                </>
-              )}
-            </div>
+                        <span>2. Core Concept</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 truncate text-[#9ca3af]">
+                        <span className="material-symbols-outlined text-[15px]">radio_button_unchecked</span>
+                        <span>3. Practice</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 truncate text-[#9ca3af]">
+                        <span className="material-symbols-outlined text-[15px]">terminal</span>
+                        <span>4. Sandbox</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -266,7 +278,7 @@ export default function ResumingDashboard({
         {/* ========================================== */}
         {/* BLOCK 2: GENTLE PROGRESS & REST DAYS */}
         {/* ========================================== */}
-        <section className="w-full bg-[#16181d] border border-[#2f343d] rounded-2xl p-5 sm:p-7 shadow-sm flex flex-col gap-4">
+        <section className="w-full bg-[#1b1e27] rounded-2xl p-5 sm:p-7 shadow-xl shadow-black/25 flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <span className="text-xs font-mono text-[#9ca3af] uppercase tracking-wider font-semibold">
@@ -373,7 +385,7 @@ export default function ResumingDashboard({
         {/* ========================================== */}
         {/* BLOCK 3: OTHER TECHNICAL PATHS (Stay in dashboard on switch) */}
         {/* ========================================== */}
-        <section className="w-full bg-[#16181d] border border-[#2f343d] rounded-2xl p-5 sm:p-7 shadow-sm flex flex-col gap-4">
+        <section className="w-full bg-[#1b1e27] rounded-2xl p-5 sm:p-7 shadow-xl shadow-black/25 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-[#1f2229] border border-[#2f343d] flex items-center justify-center text-[#6c8cff]">

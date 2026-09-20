@@ -15,7 +15,7 @@ You write Python:
   db.add(user)
   db.commit()
 """
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
@@ -49,8 +49,21 @@ Base = declarative_base()
 
 
 def create_tables():
-    """Create all database tables (if they don't already exist)"""
+    """Create all database tables (if they don't already exist) and run light migrations"""
     Base.metadata.create_all(bind=engine)
+    try:
+        with engine.connect() as conn:
+            if db_url.startswith("sqlite"):
+                res = conn.execute(text("PRAGMA table_info(projects)")).fetchall()
+                col_names = [r[1] for r in res]
+                if "difficulty_level" not in col_names:
+                    conn.execute(text("ALTER TABLE projects ADD COLUMN difficulty_level VARCHAR(20) DEFAULT 'beginner'"))
+                    conn.commit()
+            else:
+                conn.execute(text("ALTER TABLE projects ADD COLUMN IF NOT EXISTS difficulty_level VARCHAR(20) DEFAULT 'beginner'"))
+                conn.commit()
+    except Exception as e:
+        print(f"Schema migration notice: {e}")
 
 
 def get_db():

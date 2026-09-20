@@ -28,11 +28,12 @@ def build_sensei_prompt(
     chapter: str = "Introduction",
     mood: str = "focused",
     theme: str = "anime",
-    study_mode: str = "chill"
+    study_mode: str = "chill",
+    difficulty_level: str = "beginner"
 ) -> str:
     """
     Combines the base sensei prompt with the user's selected pop culture theme,
-    study mode (Serious vs Chill), and current mood.
+    study mode (Serious vs Chill), knowledge level, and current mood.
     """
     base_prompt = load_prompt_template("sensei.md")
     
@@ -57,6 +58,24 @@ def build_sensei_prompt(
 {theme_overlay}
 - Use witty metaphors, relatable pop culture analogies, and playful banter to make concepts effortless to grasp."""
 
+    # Knowledge / Difficulty calibration
+    diff_key = (difficulty_level or "beginner").lower()
+    if diff_key == "advanced":
+        diff_instructions = """## Student Knowledge Level: 🔴 ADVANCED / SENIOR
+- Treat the student as an experienced peer or senior developer.
+- DO NOT waste time on trivial syntax or basic definitions.
+- Dive straight into runtime internals, memory layout, concurrency mechanics, architectural bottlenecks, and production trade-offs."""
+    elif diff_key == "intermediate":
+        diff_instructions = """## Student Knowledge Level: 🟡 INTERMEDIATE
+- The student already understands basic syntax and standard coding fundamentals.
+- Focus on idiomatic practices, architectural patterns, state management, and real-world system patterns."""
+    else:
+        diff_instructions = """## Student Knowledge Level: 🟢 BEGINNER (Default — Zero Knowledge)
+- Assume the student is starting from absolute zero or has no prior background in this concept.
+- Break down concepts step-by-step from first principles.
+- Use intuitive, relatable physical analogies before introducing code.
+- Explain any technical term immediately so the student never feels lost or overwhelmed."""
+
     # Mood-specific guidance
     mood_instructions = {
         "chill": "The student is feeling CHILL. Keep tone relaxed, fun, low pressure, lighthearted.",
@@ -70,6 +89,8 @@ def build_sensei_prompt(
 
 {mode_instructions}
 
+{diff_instructions}
+
 ## Current Mood Calibration
 {mood_guide}
 
@@ -81,6 +102,7 @@ def build_sensei_prompt(
 Context:
 - Subject: {topic}
 - Chapter: {chapter}
+- Target Level: {diff_key.capitalize()}
 """
 
 
@@ -93,6 +115,7 @@ async def sensei_node(state: dict) -> dict:
     mood = state.get("mood", "focused")
     theme = state.get("theme", "anime")
     study_mode = state.get("study_mode", "chill")
+    difficulty_level = state.get("difficulty_level", "beginner")
     messages = state.get("messages", [])
 
     system_prompt = build_sensei_prompt(
@@ -100,7 +123,8 @@ async def sensei_node(state: dict) -> dict:
         chapter=chapter,
         mood=mood,
         theme=theme,
-        study_mode=study_mode
+        study_mode=study_mode,
+        difficulty_level=difficulty_level
     )
     
     full_messages = [SystemMessage(content=system_prompt)] + list(messages)

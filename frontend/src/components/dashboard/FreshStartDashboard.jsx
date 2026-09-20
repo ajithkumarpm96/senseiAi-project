@@ -88,11 +88,11 @@ export default function FreshStartDashboard({
     : "✓ Ready · Let's Start"
 
   return (
-    <main className="w-full min-h-screen bg-[#161920] text-[#c8cdd8]">
+    <main className="w-full min-h-screen bg-[#13151b] text-[#c8cdd8]">
       <div className="max-w-[760px] mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col gap-6 sm:gap-8">
         
         {/* BLOCK 1: Gentle Invitation Hero */}
-        <section className="relative bg-[#1f2229] border border-[#2f343d] rounded-2xl p-5 sm:p-7 shadow-sm overflow-hidden flex flex-col gap-4">
+        <section className="relative bg-[#1b1e27] rounded-2xl p-5 sm:p-7 shadow-xl shadow-black/25 overflow-hidden flex flex-col gap-4">
           {/* Ambient gentle tone gradient blob */}
           <div className="absolute -top-12 -right-12 w-64 h-64 rounded-full bg-[#6c8cff]/10 blur-3xl pointer-events-none" />
 
@@ -128,10 +128,7 @@ export default function FreshStartDashboard({
                 className="w-full sm:w-auto h-12 px-7 rounded-xl bg-[#6c8cff] hover:bg-[#809cff] active:scale-[0.99] text-[#001e60] font-semibold text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-lg shadow-[#6c8cff]/20 transition-all focus:outline-none focus:ring-2 focus:ring-[#6c8cff]"
               >
                 {starting ? (
-                  <>
-                    <span className="material-symbols-outlined text-[20px] animate-spin">progress_activity</span>
-                    <span>Opening calm space...</span>
-                  </>
+                  <span className="material-symbols-outlined text-[20px] animate-spin">progress_activity</span>
                 ) : (
                   <>
                     <span className="material-symbols-outlined text-[20px] font-bold">check_circle</span>
@@ -258,7 +255,7 @@ export default function FreshStartDashboard({
         </section>
 
         {/* BLOCK 3: Peace of Mind & Neurodivergent Accommodations */}
-        <section className="bg-[#1f2229] border border-[#2f343d] rounded-2xl p-5 sm:p-6 flex flex-col gap-4 shadow-sm">
+        <section className="bg-[#1b1e27] rounded-2xl p-5 sm:p-6 flex flex-col gap-4 shadow-xl shadow-black/25">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[#5fd38d] text-[20px]">verified_user</span>
             <h2 className="text-sm sm:text-base font-semibold text-[#f1f4fa]">

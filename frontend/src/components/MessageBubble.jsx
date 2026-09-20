@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { useAppStore } from '../store/appStore'
 import AgentThoughtTrace from './AgentThoughtTrace'
@@ -250,6 +250,9 @@ const normalizeMessageContent = (content) => {
 
 function CodeBlock({ code, language }) {
   const [copied, setCopied] = useState(false)
+  const lines = (code || '').trim().split('\n')
+  const isLong = lines.length > 10
+  const [isExpanded, setIsExpanded] = useState(false)
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code)
@@ -261,13 +264,20 @@ function CodeBlock({ code, language }) {
     <div className="flex flex-col bg-[#1a1b21] rounded-xl border border-[#2f343d] overflow-hidden my-3 not-prose shadow-sm font-sans">
       {/* Clean Minimal Code Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-[#1f2229] border-b border-[#2f343d]">
-        <span className="font-mono text-xs text-[#9ca3af] font-medium tracking-wide">
-          {language || 'code'}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs text-[#9ca3af] font-medium tracking-wide">
+            {language || 'code'}
+          </span>
+          {isLong && (
+            <span className="text-[10px] font-mono text-[#6c8cff] bg-[#6c8cff]/10 px-1.5 py-0.5 rounded">
+              {lines.length} lines
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded hover:bg-[#282a2f] text-[#9ca3af] hover:text-[#e8eaed] font-mono text-xs transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded hover:bg-[#282a2f] text-[#9ca3af] hover:text-[#e8eaed] font-mono text-xs transition-colors cursor-pointer"
         >
           {copied ? (
             <>
@@ -286,26 +296,109 @@ function CodeBlock({ code, language }) {
           )}
         </button>
       </div>
-      {/* Code Content */}
-      <pre className="p-4 overflow-x-auto font-mono text-xs leading-relaxed text-[#e8eaed] select-text">
-        <code className="font-mono">{code}</code>
-      </pre>
+
+      {/* Code Content - Collapsible if > 10 lines */}
+      <div className={`relative ${isLong && !isExpanded ? 'max-h-40 overflow-hidden' : ''}`}>
+        <pre className="p-4 overflow-x-auto font-mono text-xs leading-relaxed text-[#e8eaed] select-text">
+          <code className="font-mono">{code}</code>
+        </pre>
+
+        {isLong && !isExpanded && (
+          <div className="absolute inset-x-0 bottom-0 pt-12 pb-2.5 bg-gradient-to-t from-[#1a1b21] via-[#1a1b21]/90 to-transparent flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => setIsExpanded(true)}
+              className="px-3.5 py-1 rounded-full bg-[#242832] hover:bg-[#2e3340] text-[#6c8cff] text-xs font-mono font-medium border border-[#6c8cff]/40 shadow-lg flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+            >
+              <span>Show code ({lines.length} lines)</span>
+              <span className="material-symbols-outlined text-[14px]">expand_more</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {isLong && isExpanded && (
+        <div className="flex justify-end px-3 py-1.5 bg-[#1f2229]/60 border-t border-[#2f343d]">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(false)}
+            className="text-[11px] font-mono text-[#9ca3af] hover:text-[#e8eaed] flex items-center gap-0.5 transition-colors cursor-pointer"
+          >
+            <span>Collapse snippet</span>
+            <span className="material-symbols-outlined text-[14px]">expand_less</span>
+          </button>
+        </div>
+      )}
     </div>
   )
+}
+
+// Bionic Reading Helper: Bolds the first part of each word
+const formatBionicText = (text) => {
+  if (typeof text !== 'string') return text
+  const parts = text.split(/(\s+)/)
+  return parts.map((part, idx) => {
+    if (!part || /^\s+$/.test(part)) return part
+    const match = part.match(/^([^a-zA-Z0-9]*)([a-zA-Z0-9]+)([^a-zA-Z0-9]*)$/)
+    if (!match) return part
+    const [_, lead, word, trail] = match
+    const mid = Math.ceil(word.length * (word.length <= 3 ? 0.35 : 0.45)) || 1
+    return (
+      <React.Fragment key={idx}>
+        {lead}
+        <strong className="font-bold text-[#f1f4fa]">{word.slice(0, mid)}</strong>
+        {word.slice(mid)}
+        {trail}
+      </React.Fragment>
+    )
+  })
+}
+
+const renderBionicChildren = (children) => {
+  if (typeof children === 'string') return formatBionicText(children)
+  if (Array.isArray(children)) {
+    return children.map((child, i) => {
+      if (typeof child === 'string') {
+        return <React.Fragment key={i}>{formatBionicText(child)}</React.Fragment>
+      }
+      return child
+    })
+  }
+  return children
 }
 
 export default function MessageBubble({
   message,
   messageId,
   onSendMessage,
+  onParkThought,
   isStreaming,
-  isHighlighted = false
+  isHighlighted = false,
+  isLatest = false
 }) {
   const isUser = message.role === 'user'
   const isChallenger = message.role === 'challenger'
   const [copiedFeedback, setCopiedFeedback] = useState(false)
   const [showDeepDive, setShowDeepDive] = useState(false)
+  const [showMobileLevers, setShowMobileLevers] = useState(false)
   const dyslexicFont = useAppStore((state) => state.dyslexicFont)
+  const bionicReading = useAppStore((state) => state.bionicReading)
+  const focusedParagraphId = useAppStore((state) => state.focusedParagraphId)
+  const setFocusedParagraphId = useAppStore((state) => state.setFocusedParagraphId)
+
+  const lastTapRef = useRef(0)
+  const handleDoubleTap = () => {
+    if (isUser) return
+    const now = Date.now()
+    if (now - lastTapRef.current < 320) {
+      if (navigator.vibrate) navigator.vibrate([15, 30, 15])
+      const snippet = (message.content || '').replace(/[#*`_]/g, '').slice(0, 120).trim()
+      if (onParkThought && snippet) {
+        onParkThought(snippet)
+      }
+    }
+    lastTapRef.current = now
+  }
 
   const quizInfo = useMemo(() => {
     if (message.quizData) {
@@ -403,7 +496,15 @@ export default function MessageBubble({
 
   // SENSEI / AI DIRECT RESPONSE (Claude-style centered content on canvas)
   return (
-    <div id={messageId} className={`w-full max-w-5xl xl:max-w-6xl mx-auto my-6 transition-all ${isHighlighted ? 'ring-2 ring-[#6c8cff] rounded-2xl p-2' : ''}`}>
+    <div 
+      id={messageId} 
+      onClick={(e) => {
+        if (focusedParagraphId && e.target.tagName !== 'P') {
+          setFocusedParagraphId(null)
+        }
+      }}
+      className={`w-full max-w-5xl xl:max-w-6xl mx-auto my-6 transition-all ${isHighlighted ? 'ring-2 ring-[#6c8cff] rounded-2xl p-2' : ''}`}
+    >
       {/* Agent Thought Trace Bar */}
       {message.steps && message.steps.length > 0 && (
         <AgentThoughtTrace steps={message.steps} isStreaming={isStreaming} />
@@ -413,7 +514,10 @@ export default function MessageBubble({
       {isStreaming && !message.content && <ClaudeLoadingIndicator />}
 
       {/* Main Content Article */}
-      <article className={`flex flex-col gap-4 text-[#c8cdd8] leading-relaxed ${dyslexicFont ? 'font-dyslexic-content' : ''}`}>
+      <article 
+        onClick={handleDoubleTap}
+        className={`flex flex-col gap-4 text-[#c8cdd8] leading-relaxed select-text ${dyslexicFont ? 'font-dyslexic-content' : ''}`}
+      >
         {processedContent ? (
           <>
             <ReactMarkdown
@@ -516,11 +620,31 @@ export default function MessageBubble({
                     {children}
                   </blockquote>
                 ),
-                p: ({ children }) => (
-                  <p className="text-sm sm:text-base text-[#c8cdd8] leading-relaxed">
-                    {children}
-                  </p>
-                ),
+                p: ({ children, node }) => {
+                  const pLine = node?.position?.start?.line || 0
+                  const pId = `${messageId}-p-${pLine}`
+                  const isFocused = focusedParagraphId === pId
+                  const isDimmed = Boolean(focusedParagraphId && !isFocused)
+
+                  return (
+                    <p 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDoubleTap()
+                        setFocusedParagraphId(isFocused ? null : pId)
+                      }}
+                      className={`text-sm sm:text-base leading-relaxed transition-all duration-200 cursor-pointer mb-3 last:mb-0 ${
+                        isDimmed ? 'opacity-25' : 'opacity-100'
+                      } ${
+                        isFocused 
+                          ? 'ring-1 ring-[#6c8cff]/60 bg-[#6c8cff]/10 text-[#f1f4fa] rounded-xl p-3 shadow-inner' 
+                          : 'text-[#c8cdd8]'
+                      }`}
+                    >
+                      {bionicReading ? renderBionicChildren(children) : children}
+                    </p>
+                  )
+                },
                 ul: ({ children }) => (
                   <ul className="list-disc list-outside ml-5 space-y-1.5 my-2 text-sm text-[#c8cdd8]">
                     {children}
@@ -543,10 +667,11 @@ export default function MessageBubble({
         ) : null}
       </article>
 
-      {/* QUIET ACTION ROW (Cognitive Levers from Stitch) */}
-      {!isStreaming && processedContent && (
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 mt-4 border-t border-[#2f343d] text-xs">
-          <div className="flex flex-wrap items-center gap-1.5">
+      {/* QUIET ACTION ROW (Cognitive Levers from Stitch) - Only shown on the latest response */}
+      {!isStreaming && processedContent && isLatest && (
+        <div className="flex flex-wrap items-center justify-between gap-1.5 pt-2 sm:pt-3 mt-2 sm:mt-4 border-t border-[#2f343d]/50 text-xs relative">
+          {/* Desktop Levers Row */}
+          <div className="hidden sm:flex flex-wrap items-center gap-1.5 font-mono">
             {/* Copy Button */}
             <button
               type="button"
@@ -590,14 +715,90 @@ export default function MessageBubble({
             </button>
           </div>
 
+          {/* Mobile Sleek Micro-Toolbar */}
+          <div className="flex sm:hidden items-center gap-1 font-mono relative">
+            {/* Compact Copy Button */}
+            <button
+              type="button"
+              onClick={handleCopyMessage}
+              className="p-1 rounded text-[#9ca3af] hover:text-[#e8eaed] transition-colors flex items-center justify-center"
+              title="Copy message"
+            >
+              <span className="material-symbols-outlined text-[15px]">
+                {copiedFeedback ? 'check' : 'content_copy'}
+              </span>
+            </button>
+
+            {/* Collapsible Levers Dropdown Button */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowMobileLevers((prev) => !prev)}
+                className="flex items-center gap-0.5 p-1 rounded text-[#9ca3af] hover:text-[#f1f4fa] transition-colors"
+                title="Cognitive Prompt Levers"
+              >
+                <span className="material-symbols-outlined text-[15px] text-[#f8bc61]">tune</span>
+                <span className={`material-symbols-outlined text-[12px] transition-transform ${showMobileLevers ? 'rotate-180' : ''}`}>
+                  expand_more
+                </span>
+              </button>
+
+              {/* Mobile Levers Popover */}
+              {showMobileLevers && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-30" 
+                    onClick={() => setShowMobileLevers(false)} 
+                  />
+                  <div className="absolute bottom-full left-0 mb-1.5 w-60 bg-[#16181d] border border-[#2f343d] rounded-xl p-1.5 shadow-2xl z-40 flex flex-col gap-1 animate-fadeIn">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMobileLevers(false)
+                        onSendMessage?.('Could you explain that part in a simpler, shorter way with zero jargon?')
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-[#f8bc61] hover:bg-[#1f2229] transition-colors text-left"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">lightbulb</span>
+                      <span>Simpler (Zero jargon)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMobileLevers(false)
+                        onSendMessage?.('Can you distill the key takeaways into 3 quick bullet points?')
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-[#5fd38d] hover:bg-[#1f2229] transition-colors text-left"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">content_cut</span>
+                      <span>Shorter (3 bullets)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMobileLevers(false)
+                        onSendMessage?.('Could you explain this concept using a completely different real-world analogy?')
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs text-[#6c8cff] hover:bg-[#1f2229] transition-colors text-left"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">autorenew</span>
+                      <span>Different analogy</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
           {/* Collapsible Deep Dive */}
           <button
             type="button"
             onClick={() => setShowDeepDive(!showDeepDive)}
-            className="text-xs text-[#6c8cff] hover:underline flex items-center gap-1 font-mono ml-auto"
+            className="text-[11px] sm:text-xs text-[#6c8cff] hover:underline flex items-center gap-0.5 font-mono ml-auto"
           >
-            <span>{showDeepDive ? 'Hide details' : 'Show more details'}</span>
-            <span className={`material-symbols-outlined text-[15px] transition-transform ${showDeepDive ? 'rotate-180' : ''}`}>
+            <span className="hidden sm:inline">{showDeepDive ? 'Hide details' : 'Show more details'}</span>
+            <span className="sm:hidden">{showDeepDive ? 'Hide' : 'Details'}</span>
+            <span className={`material-symbols-outlined text-[13px] sm:text-[15px] transition-transform ${showDeepDive ? 'rotate-180' : ''}`}>
               expand_more
             </span>
           </button>

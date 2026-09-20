@@ -6,6 +6,8 @@ import { useChat } from '../hooks/useChat'
 import ChatWindow from '../components/ChatWindow'
 import ProgressBar from '../components/ProgressBar'
 import VibeSettingsModal from '../components/workspace/VibeSettingsModal'
+import ParkThoughtModal from '../components/workspace/ParkThoughtModal'
+import SenseiLoader from '../components/common/SenseiLoader'
 
 const cleanChapterTitle = (title) => {
   if (!title) return ''
@@ -36,41 +38,151 @@ export default function StudyPage() {
   const [selectedChapter, setSelectedChapter] = useState(null)
   const [mood, setMood] = useState('focused')
   const [studyMode, setStudyMode] = useState('chill') // 'chill' | 'serious'
+  const [difficultyLevel, setDifficultyLevel] = useState(() => {
+    return (typeof window !== 'undefined' && localStorage.getItem(`sensei_difficulty_${projectId}`)) || 'beginner'
+  })
   const [newChapterTitle, setNewChapterTitle] = useState('')
   const [showAddInline, setShowAddInline] = useState(false)
   const [isGeneratingChapters, setIsGeneratingChapters] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(() => (typeof window !== 'undefined' ? window.innerWidth >= 768 : false))
   const [isVibeModalOpen, setIsVibeModalOpen] = useState(false)
+  const [isParkModalOpen, setIsParkModalOpen] = useState(false)
+  const [toastMessage, setToastMessage] = useState(null)
+  const [isChatScrolled, setIsChatScrolled] = useState(false)
+  const [isLoadingProject, setIsLoadingProject] = useState(true)
+  const [initialMessages, setInitialMessages] = useState(null)
+
+  const handleSelectDifficultyLevel = (lvl) => {
+    const validLevel = lvl || 'beginner'
+    setDifficultyLevel(validLevel)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`sensei_difficulty_${projectId}`, validLevel)
+    }
+    if (projectId) {
+      api.put(`/projects/${projectId}`, { difficulty_level: validLevel }).catch(() => {})
+    }
+  }
+
+  // Callback triggered when SSE stream automatically synthesizes a syllabus on the first chat
+  const handleSyllabusGenerated = ({ coreChapters, optionalChapters: optChaps, selectedChapterId }) => {
+    if (coreChapters && coreChapters.length > 0) {
+      setChapters(coreChapters)
+      setOptionalChapters(optChaps || [])
+      const found = coreChapters.find((c) => c.id === selectedChapterId) || coreChapters[0]
+      setSelectedChapter(found)
+      if (found?.id) {
+        localStorage.setItem(`sensei_active_chapter_${projectId}`, String(found.id))
+      }
+    }
+  }
 
   const {
     messages,
     isStreaming,
+    isLoadingHistory,
     error,
     sendMessage,
     requestChallenge,
     stopStreaming
-  } = useChat(projectId, selectedChapter?.id)
+  } = useChat(
+    projectId,
+    selectedChapter?.id,
+    initialMessages,
+    !isLoadingProject,
+    handleSyllabusGenerated
+  )
+
+  const addParkedThought = useAppStore((state) => state.addParkedThought)
+  const parkedThoughts = useAppStore((state) => state.parkedThoughts || [])
+
+  const handleSaveThought = (thought) => {
+    addParkedThought(thought, selectedChapter?.title || 'General')
+    setToastMessage(`Thought parked: "${thought.slice(0, 32)}..."`)
+    setTimeout(() => setToastMessage(null), 3500)
+  }
+
+  const handleTooMuch = () => {
+    sendMessage('Too much! Please re-explain this shorter, simpler, and with zero jargon.', mood, studyMode, null, difficultyLevel)
+  }
+
+  // Edge swipe-right to return to dashboard on mobile
+  useEffect(() => {
+    let touchStartX = 0
+    let touchStartY = 0
+
+    const handleTouchStart = (e) => {
+      if (e.touches && e.touches.length > 0) {
+        touchStartX = e.touches[0].clientX
+        touchStartY = e.touches[0].clientY
+      }
+    }
+
+    const handleTouchEnd = (e) => {
+      if (e.changedTouches && e.changedTouches.length > 0) {
+        const touchEndX = e.changedTouches[0].clientX
+        const touchEndY = e.changedTouches[0].clientY
+        const deltaX = touchEndX - touchStartX
+        const deltaY = touchEndY - touchStartY
+
+        // If swipe starts near left edge (< 45px) and swipes right > 70px with low vertical angle
+        if (touchStartX < 45 && deltaX > 70 && Math.abs(deltaY) < 60) {
+          navigate('/')
+        }
+      }
+    }
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true })
+    window.addEventListener('touchend', handleTouchEnd, { passive: true })
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart)
+      window.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [navigate])
 
   useEffect(() => {
     loadProjectAndChapters()
   }, [projectId])
 
   const loadProjectAndChapters = async () => {
+    setIsLoadingProject(true)
     try {
       const [projRes, chapRes] = await Promise.all([
         api.get(`/projects/${projectId}`),
         api.get(`/projects/${projectId}/chapters`)
       ])
-      setProject(projRes.data)
-      setChapters(chapRes.data)
+      const projData = projRes.data
+      const chapList = chapRes.data || []
+      setProject(projData)
+      setChapters(chapList)
+      if (projData.difficulty_level) {
+        setDifficultyLevel(projData.difficulty_level)
+      }
 
-      // Restore previously selected chapter from localStorage
+      // Restore previously selected chapter from localStorage or active in-progress chapter
       const savedChapId = localStorage.getItem(`sensei_active_chapter_${projectId}`)
-      const found = savedChapId ? chapRes.data.find((c) => String(c.id) === String(savedChapId)) : null
-      const toSelect = found || (chapRes.data.length > 0 ? chapRes.data[0] : null)
+      const found = savedChapId ? chapList.find((c) => String(c.id) === String(savedChapId)) : null
+      const toSelect = 
+        found || 
+        chapList.find((c) => c.status === 'in_progress') || 
+        chapList.find((c) => c.status !== 'completed') || 
+        (chapList.length > 0 ? chapList[0] : null)
       setSelectedChapter(toSelect)
+
+      // Pre-load initial chat history for this active chapter
+      try {
+        const historyUrl = toSelect?.id
+          ? `/chat/history/${projectId}?chapter_id=${toSelect.id}`
+          : `/chat/history/${projectId}`
+        const histRes = await api.get(historyUrl)
+        setInitialMessages(histRes.data || [])
+      } catch (hErr) {
+        console.error('Error pre-loading initial chat history', hErr)
+        setInitialMessages([])
+      }
     } catch (err) {
       console.error('Error loading project details', err)
+    } finally {
+      setIsLoadingProject(false)
     }
   }
 
@@ -78,6 +190,9 @@ export default function StudyPage() {
     setSelectedChapter(ch)
     if (ch?.id) {
       localStorage.setItem(`sensei_active_chapter_${projectId}`, String(ch.id))
+    }
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setSidebarOpen(false)
     }
   }
 
@@ -148,16 +263,41 @@ export default function StudyPage() {
   const progressPercentage = chapters.length > 0 ? (completedCount / chapters.length) * 100 : 0
   const selectedIndex = chapters.findIndex((c) => c.id === selectedChapter?.id)
 
+  if (isLoadingProject) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#161920]">
+        <SenseiLoader size={130} />
+      </div>
+    )
+  }
+
   return (
     <div className={`h-screen flex flex-col bg-[#161920] text-[#c8cdd8] overflow-hidden ${softView ? 'soft-view-mode' : ''} ${textScale === 'large' ? 'text-scale-large' : ''}`}>
       
+      {/* Toast Notification for Parked Thoughts */}
+      {toastMessage && (
+        <div className="fixed top-16 right-4 sm:right-6 z-50 bg-[#1f2229] border border-[#5fd38d] text-[#e8eaed] px-3.5 py-2 rounded-xl flex items-center gap-2 shadow-2xl animate-slideDown">
+          <span className="material-symbols-outlined text-[#5fd38d] text-[18px]">check_circle</span>
+          <span className="text-xs font-mono">{toastMessage}</span>
+        </div>
+      )}
+
       {/* ========================================================= */}
-      {/* TOP WORKSPACE HEADER (Stitch Standard) */}
+      {/* TOP WORKSPACE HEADER (Responsive Mobile / Desktop) */}
       {/* ========================================================= */}
-      <header className="h-16 bg-[#16181d] border-b border-[#2f343d] flex items-center justify-between px-4 sm:px-6 shrink-0 z-30">
+      {/* ========================================================= */}
+      {/* TOP WORKSPACE HEADER (Responsive Mobile / Desktop) */}
+      {/* ========================================================= */}
+      <header className={`
+        transition-all duration-300 ease-in-out z-30 shrink-0
+        ${isChatScrolled
+          ? 'max-md:fixed max-md:top-0 max-md:left-0 max-md:right-0 max-md:h-0 max-md:bg-transparent max-md:border-b-0 max-md:pointer-events-none md:h-16 md:bg-[#16181d] md:border-b md:border-[#2f343d] flex items-center justify-between px-3 sm:px-6'
+          : 'h-13 sm:h-14 md:h-16 bg-[#16181d] border-b border-[#2f343d] flex items-center justify-between px-3 sm:px-6'
+        }
+      `}>
         
-        {/* Left: Back Link & Breadcrumbs */}
-        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+        {/* Desktop Left: Back Link & Breadcrumbs */}
+        <div className="hidden md:flex items-center gap-3 sm:gap-4 min-w-0">
           <button
             type="button"
             onClick={() => navigate('/')}
@@ -180,8 +320,20 @@ export default function StudyPage() {
           </div>
         </div>
 
-        {/* Right: Straw Hat (Luffy) Vibe Button & Sensory Controls */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Mobile Left: Hamburger Menu Button (Vanishes when scrolled) */}
+        <div className={`flex md:hidden items-center transition-all duration-300 ${isChatScrolled ? 'opacity-0 -translate-x-8 pointer-events-none w-0 overflow-hidden' : 'opacity-100 pointer-events-auto'}`}>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            className="p-1.5 -ml-1 rounded-xl text-[#9ca3af] hover:text-[#f1f4fa] hover:bg-[#1f2229] transition-colors flex items-center justify-center"
+            title="Toggle Syllabus Navigation"
+          >
+            <span className="material-symbols-outlined text-[24px]">menu</span>
+          </button>
+        </div>
+
+        {/* Desktop Right: Straw Hat Vibe Button, Quiz & Sensory Controls */}
+        <div className="hidden md:flex items-center gap-2 sm:gap-3 shrink-0">
           
           {/* Straw Hat 👒 Vibe & Mood Pop-Up Trigger */}
           <button
@@ -191,7 +343,7 @@ export default function StudyPage() {
             title="Companion Vibe, Study Mood & Persona"
           >
             <span className="text-base group-hover:scale-110 transition-transform select-none">👒</span>
-            <span className="hidden md:inline font-mono text-[#f8bc61]">Vibe</span>
+            <span className="font-mono text-[#f8bc61]">Vibe</span>
           </button>
 
           {/* Quiz Checkpoint Button */}
@@ -203,7 +355,7 @@ export default function StudyPage() {
             title="Trigger an interview checkpoint challenge"
           >
             <span className="material-symbols-outlined text-[16px] group-hover:rotate-12 transition-transform">swords</span>
-            <span className="hidden sm:inline font-mono">Quiz</span>
+            <span className="font-mono">Quiz</span>
           </button>
 
           {/* Accessibility Toolbar */}
@@ -248,6 +400,62 @@ export default function StudyPage() {
             {user?.username ? user.username.charAt(0).toUpperCase() : 'U'}
           </div>
         </div>
+
+        {/* Mobile Right: Floated Action Icons (Too much, Park a thought, Quiz, Vibe) */}
+        <div className={`
+          flex md:hidden items-center gap-1.5 transition-all duration-300 pointer-events-auto
+          ${isChatScrolled 
+            ? 'fixed top-2.5 right-3 bg-[#16181d]/85 backdrop-blur-xl border border-[#2f343d]/80 shadow-2xl rounded-full p-1.5' 
+            : ''
+          }
+        `}>
+          {/* Too Much / Simplify */}
+          <button
+            type="button"
+            onClick={handleTooMuch}
+            disabled={isStreaming}
+            className="p-1.5 rounded-xl bg-[#1f2229] hover:bg-[#282a2f] border border-[#2f343d] text-[#f8bc61] transition-colors flex items-center justify-center disabled:opacity-50"
+            title="Too much! Re-explain shorter & simpler"
+          >
+            <span className="material-symbols-outlined text-[17px]">energy_savings_leaf</span>
+          </button>
+
+          {/* Park a Thought */}
+          <button
+            type="button"
+            onClick={() => setIsParkModalOpen(true)}
+            className="p-1.5 rounded-xl bg-[#1f2229] hover:bg-[#282a2f] border border-[#2f343d] text-[#5fd38d] transition-colors flex items-center justify-center relative cursor-pointer"
+            title="Park a thought"
+          >
+            <span className="material-symbols-outlined text-[17px]">bookmark_add</span>
+            {parkedThoughts.length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#5fd38d] text-[#00391d] text-[10px] font-bold flex items-center justify-center font-mono shadow-sm">
+                {parkedThoughts.length}
+              </span>
+            )}
+          </button>
+
+          {/* Quiz Checkpoint Button */}
+          <button
+            type="button"
+            onClick={() => requestChallenge(mood, studyMode)}
+            disabled={isStreaming}
+            className="p-1.5 rounded-xl bg-[#1f2229] hover:bg-[#282a2f] border border-[#f8bc61]/40 text-[#f8bc61] transition-colors flex items-center justify-center disabled:opacity-50"
+            title="Trigger an interview checkpoint challenge"
+          >
+            <span className="material-symbols-outlined text-[17px]">swords</span>
+          </button>
+
+          {/* Straw Hat 👒 Vibe & Mood Pop-Up Trigger */}
+          <button
+            type="button"
+            onClick={() => setIsVibeModalOpen(true)}
+            className="p-1.5 rounded-xl bg-[#1f2229] hover:bg-[#282a2f] border border-[#2f343d] hover:border-[#f8bc61]/60 transition-colors flex items-center justify-center text-[15px]"
+            title="Companion Vibe, Study Mood & Persona"
+          >
+            <span>👒</span>
+          </button>
+        </div>
       </header>
 
       {/* ========================================================= */}
@@ -255,12 +463,12 @@ export default function StudyPage() {
       {/* ========================================================= */}
       <div className="flex flex-1 overflow-hidden relative">
         
-        {/* Floating Expand Syllabus Button (Shown when collapsed) */}
+        {/* Floating Expand Syllabus Button (Shown when collapsed on desktop) */}
         {!sidebarOpen && (
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
-            className="absolute left-0 top-3 z-30 flex items-center gap-1.5 bg-[#16181d] hover:bg-[#1f2229] border-y border-r border-[#2f343d] hover:border-[#6c8cff]/50 text-[#9ca3af] hover:text-[#6c8cff] py-2 px-2.5 rounded-r-xl shadow-lg transition-all font-mono text-xs"
+            className="hidden md:flex absolute left-0 top-3 z-30 items-center gap-1.5 bg-[#16181d] hover:bg-[#1f2229] border-y border-r border-[#2f343d] hover:border-[#6c8cff]/50 text-[#9ca3af] hover:text-[#6c8cff] py-2 px-2.5 rounded-r-xl shadow-lg transition-all font-mono text-xs"
             title="Expand Syllabus"
           >
             <span className="material-symbols-outlined text-[18px]">last_page</span>
@@ -268,9 +476,23 @@ export default function StudyPage() {
           </button>
         )}
 
-        {/* SYLLABUS SIDEBAR (Redesigned to Cognitive Sanctuary) */}
-        {sidebarOpen && (
-          <aside className="w-64 sm:w-72 bg-[#16181d] border-r border-[#2f343d] flex flex-col shrink-0 z-20 transition-all select-none">
+        {/* Mobile Drawer Backdrop with smooth fade */}
+        <div
+          className={`fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden transition-opacity duration-300 ease-in-out ${
+            sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+          }`}
+          onClick={() => setSidebarOpen(false)}
+        />
+
+        {/* SYLLABUS SIDEBAR (Smooth sliding drawer on mobile, collapsible side panel on desktop) */}
+        <aside
+          className={`
+            fixed md:relative inset-y-0 left-0 z-50 md:z-20
+            w-72 max-w-[85vw] bg-[#16181d] border-r border-[#2f343d] flex flex-col shrink-0 select-none shadow-2xl md:shadow-none h-full
+            transition-transform duration-300 ease-in-out
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:hidden'}
+          `}
+        >
             
             {/* Sidebar Header with Collapse Button */}
             <div className="p-3.5 border-b border-[#2f343d] flex items-center justify-between">
@@ -303,9 +525,9 @@ export default function StudyPage() {
                   type="button"
                   onClick={() => setSidebarOpen(false)}
                   className="p-1 rounded-lg hover:bg-[#1f2229] text-[#9ca3af] hover:text-[#f1f4fa] transition-colors ml-0.5"
-                  title="Collapse Syllabus"
+                  title="Close Syllabus"
                 >
-                  <span className="material-symbols-outlined text-[18px]">first_page</span>
+                  <span className="material-symbols-outlined text-[18px]">close</span>
                 </button>
               </div>
             </div>
@@ -356,14 +578,17 @@ export default function StudyPage() {
               {chapters.length === 0 ? (
                 <div className="text-center py-8 px-4 text-[#9ca3af]">
                   <span className="material-symbols-outlined text-3xl mb-1 text-[#6c8cff]/60">auto_stories</span>
-                  <p className="text-xs mb-3">No chapters created yet.</p>
+                  <p className="text-xs font-semibold text-[#f1f4fa] mb-1">Auto-Generated Syllabus</p>
+                  <p className="text-[11px] mb-3 text-[#9ca3af]/80 leading-relaxed">
+                    Send your first chat message to automatically generate your tailored syllabus.
+                  </p>
                   <button
                     type="button"
                     onClick={handleGenerateSyllabus}
                     disabled={isGeneratingChapters}
-                    className="w-full bg-[#6c8cff] hover:bg-[#809cff] text-[#001e60] font-semibold text-xs py-2 px-3 rounded-xl transition-all shadow-sm"
+                    className="w-full bg-[#6c8cff]/20 hover:bg-[#6c8cff]/30 text-[#6c8cff] border border-[#6c8cff]/30 font-semibold text-xs py-2 px-3 rounded-xl transition-all shadow-sm"
                   >
-                    {isGeneratingChapters ? 'Synthesizing...' : '✨ Generate AI Syllabus'}
+                    {isGeneratingChapters ? 'Synthesizing...' : '✨ Generate Now'}
                   </button>
                 </div>
               ) : (
@@ -441,16 +666,18 @@ export default function StudyPage() {
               <span>Self-paced learning</span>
             </div>
           </aside>
-        )}
 
         {/* CHAT / ACTIVE LESSON WORKSPACE */}
         <main className="flex-1 flex flex-col h-full overflow-hidden bg-[#161920]">
           <ChatWindow
             messages={messages}
             isStreaming={isStreaming}
-            onSendMessage={(msg, target) => sendMessage(msg, mood, studyMode, target)}
+            isLoadingHistory={isLoadingHistory || isLoadingProject || initialMessages === null}
+            onSendMessage={(msg, target) => sendMessage(msg, mood, studyMode, target, difficultyLevel)}
             onStopStreaming={stopStreaming}
             onRequestChallenge={() => requestChallenge(mood, studyMode)}
+            onParkThought={() => setIsParkModalOpen(true)}
+            onTooMuch={handleTooMuch}
             currentTopic={project?.title || ''}
             currentChapter={selectedChapter ? cleanChapterTitle(selectedChapter.title) : ''}
             currentChapterIndex={selectedIndex >= 0 ? selectedIndex : 0}
@@ -458,6 +685,10 @@ export default function StudyPage() {
             error={error}
             isFocusMode={!sidebarOpen}
             onToggleFocusMode={() => setSidebarOpen(!sidebarOpen)}
+            onChatScroll={setIsChatScrolled}
+            isChatScrolled={isChatScrolled}
+            difficultyLevel={difficultyLevel}
+            onSelectDifficultyLevel={handleSelectDifficultyLevel}
           />
         </main>
       </div>
@@ -470,6 +701,17 @@ export default function StudyPage() {
         onSelectMood={setMood}
         studyMode={studyMode}
         onSelectStudyMode={setStudyMode}
+        difficultyLevel={difficultyLevel}
+        onSelectDifficultyLevel={handleSelectDifficultyLevel}
+      />
+
+      {/* Park Thought Modal */}
+      <ParkThoughtModal
+        isOpen={isParkModalOpen}
+        onClose={() => setIsParkModalOpen(false)}
+        onSaveThought={handleSaveThought}
+        onAskSensei={(prompt) => sendMessage(prompt, mood, studyMode, null, difficultyLevel)}
+        currentTopic={selectedChapter?.title || 'General'}
       />
     </div>
   )

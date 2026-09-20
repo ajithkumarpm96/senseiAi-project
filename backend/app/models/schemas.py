@@ -40,15 +40,18 @@ class Token(BaseModel):
 class ProjectCreate(BaseModel):
     title: str
     description: str = ""
+    difficulty_level: Optional[str] = "beginner"
 
 class ProjectUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    difficulty_level: Optional[str] = None
 
 class ProjectOut(BaseModel):
     id: int
     title: str
     description: str
+    difficulty_level: Optional[str] = "beginner"
     created_at: datetime
     
     class Config:
@@ -93,6 +96,7 @@ class ChatStreamRequest(BaseModel):
     mood: str = "focused"
     theme: Optional[str] = None
     study_mode: str = "chill"  # "chill" | "serious"
+    difficulty_level: Optional[str] = "beginner"  # "beginner" | "intermediate" | "advanced"
     target_agent: Optional[str] = None  # "sensei" | "challenger" | "hype"
 
 class MessageOut(BaseModel):

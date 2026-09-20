@@ -29,6 +29,7 @@ class StudyState(TypedDict):
     mood: Optional[str]        # "chill" | "focused" | "tired" | "hyped"
     theme: Optional[str]       # "anime" | "marvel" | "harry_potter"
     study_mode: Optional[str]  # "chill" (analogies) | "serious" (interview prep)
+    difficulty_level: Optional[str]  # "beginner" | "intermediate" | "advanced"
     target_agent: Optional[str] # Explicit routing override ("sensei" | "challenger" | "hype")
     agent_type: Optional[str]  # Which agent responded ("sensei" | "challenger" | "hype")
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 
 export default function NewSubjectModal({ isOpen, onClose, onCreate }) {
   const [title, setTitle] = useState('')
+  const [difficultyLevel, setDifficultyLevel] = useState('beginner')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   if (!isOpen) return null
@@ -19,8 +20,9 @@ export default function NewSubjectModal({ isOpen, onClose, onCreate }) {
     if (!title.trim() || isSubmitting) return
     setIsSubmitting(true)
     try {
-      await onCreate(title.trim())
+      await onCreate(title.trim(), difficultyLevel)
       setTitle('')
+      setDifficultyLevel('beginner')
       onClose()
     } finally {
       setIsSubmitting(false)
@@ -67,6 +69,67 @@ export default function NewSubjectModal({ isOpen, onClose, onCreate }) {
               placeholder="e.g. Distributed Systems, Rust Borrow Checker, Next.js..."
               className="w-full h-12 bg-[#1a1b21] border border-[#2f343d] focus:border-[#6c8cff] focus:ring-1 focus:ring-[#6c8cff] rounded-xl px-4 text-sm text-[#e8eaed] placeholder-[#9ca3af]/50 outline-none transition-colors"
             />
+          </div>
+
+          {/* Starting Knowledge Level */}
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium text-[#9ca3af] uppercase tracking-wider font-mono">
+                Knowledge Level
+              </label>
+              <span className="text-[10px] font-mono text-[#5fd38d]">
+                {difficultyLevel === 'advanced' ? 'Internals & Performance' : difficultyLevel === 'intermediate' ? 'Practical & Idiomatic' : 'Zero Assumed Knowledge (Default)'}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setDifficultyLevel('beginner')}
+                className={`py-2 px-2.5 rounded-xl border text-left transition-all flex flex-col gap-0.5 cursor-pointer ${
+                  difficultyLevel === 'beginner'
+                    ? 'bg-[#183e28]/50 border-[#5fd38d] text-[#5fd38d]'
+                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af] hover:text-[#e8eaed]'
+                }`}
+              >
+                <div className="flex items-center gap-1 text-xs font-semibold">
+                  <span>🟢</span>
+                  <span>Beginner</span>
+                </div>
+                <span className="text-[10px] opacity-75">From scratch</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDifficultyLevel('intermediate')}
+                className={`py-2 px-2.5 rounded-xl border text-left transition-all flex flex-col gap-0.5 cursor-pointer ${
+                  difficultyLevel === 'intermediate'
+                    ? 'bg-[#f8bc61]/15 border-[#f8bc61] text-[#f8bc61]'
+                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af] hover:text-[#e8eaed]'
+                }`}
+              >
+                <div className="flex items-center gap-1 text-xs font-semibold">
+                  <span>🟡</span>
+                  <span>Intermediate</span>
+                </div>
+                <span className="text-[10px] opacity-75">Know basics</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDifficultyLevel('advanced')}
+                className={`py-2 px-2.5 rounded-xl border text-left transition-all flex flex-col gap-0.5 cursor-pointer ${
+                  difficultyLevel === 'advanced'
+                    ? 'bg-[#6c8cff]/15 border-[#6c8cff] text-[#6c8cff]'
+                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af] hover:text-[#e8eaed]'
+                }`}
+              >
+                <div className="flex items-center gap-1 text-xs font-semibold">
+                  <span>🔴</span>
+                  <span>Advanced</span>
+                </div>
+                <span className="text-[10px] opacity-75">Deep internals</span>
+              </button>
+            </div>
           </div>
 
           {/* Quick Suggestions */}

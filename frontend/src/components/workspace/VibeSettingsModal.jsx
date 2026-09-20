@@ -20,7 +20,9 @@ export default function VibeSettingsModal({
   currentMood = 'focused', 
   onSelectMood,
   studyMode = 'chill',
-  onSelectStudyMode
+  onSelectStudyMode,
+  difficultyLevel = 'beginner',
+  onSelectDifficultyLevel
 }) {
   const theme = useAppStore((state) => state.theme)
   const setTheme = useAppStore((state) => state.setTheme)
@@ -28,11 +30,20 @@ export default function VibeSettingsModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+    <div 
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-fadeIn"
+      onClick={onClose}
+    >
       <div 
-        className="w-full max-w-lg bg-[#16181d] border border-[#2f343d] rounded-2xl p-6 shadow-2xl relative flex flex-col gap-5 animate-scaleUp text-[#e8eaed]"
+        className="w-full sm:max-w-lg bg-[#16181d] border-t sm:border border-[#2f343d] rounded-t-3xl sm:rounded-2xl p-5 sm:p-6 shadow-2xl relative flex flex-col gap-4 animate-slideUp sm:animate-scaleUp text-[#e8eaed] max-h-[88vh] pb-8 sm:pb-6"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Mobile Drag Handle */}
+        <div 
+          className="w-12 h-1.5 rounded-full bg-[#4b515d]/70 mx-auto -mt-1 mb-1 sm:hidden cursor-grab" 
+          onClick={onClose} 
+        />
+
         {/* Header */}
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -133,7 +144,63 @@ export default function VibeSettingsModal({
             </div>
           </div>
 
-          {/* Section 3: Daily Energy & Mood */}
+          {/* Section 3: Knowledge / Difficulty Level */}
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-semibold text-[#9ca3af] uppercase tracking-wider font-mono">
+              Knowledge &amp; Difficulty Level
+            </span>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => onSelectDifficultyLevel && onSelectDifficultyLevel('beginner')}
+                className={`flex flex-col gap-1 p-2.5 rounded-xl border text-left transition-all ${
+                  difficultyLevel === 'beginner'
+                    ? 'bg-[#183e28]/40 border-[#5fd38d] text-[#5fd38d] font-semibold'
+                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af] hover:text-[#e8eaed] hover:bg-[#1f2229]'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span>🟢</span>
+                  <span>Beginner</span>
+                </div>
+                <span className="text-[10px] opacity-75">From scratch, zero jargon</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSelectDifficultyLevel && onSelectDifficultyLevel('intermediate')}
+                className={`flex flex-col gap-1 p-2.5 rounded-xl border text-left transition-all ${
+                  difficultyLevel === 'intermediate'
+                    ? 'bg-[#f8bc61]/15 border-[#f8bc61] text-[#f8bc61] font-semibold'
+                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af] hover:text-[#e8eaed] hover:bg-[#1f2229]'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span>🟡</span>
+                  <span>Intermediate</span>
+                </div>
+                <span className="text-[10px] opacity-75">Idiomatic &amp; practical</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onSelectDifficultyLevel && onSelectDifficultyLevel('advanced')}
+                className={`flex flex-col gap-1 p-2.5 rounded-xl border text-left transition-all ${
+                  difficultyLevel === 'advanced'
+                    ? 'bg-[#6c8cff]/15 border-[#6c8cff] text-[#6c8cff] font-semibold'
+                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af] hover:text-[#e8eaed] hover:bg-[#1f2229]'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span>🔴</span>
+                  <span>Advanced</span>
+                </div>
+                <span className="text-[10px] opacity-75">Internals &amp; low-level</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Section 4: Daily Energy & Mood */}
           <div className="flex flex-col gap-2">
             <span className="text-xs font-semibold text-[#9ca3af] uppercase tracking-wider font-mono">
               Current Energy Level

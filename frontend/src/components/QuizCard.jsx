@@ -14,6 +14,13 @@ export default function QuizCard({ quizData, onAskSensei, onNextChallenge }) {
     if (isSubmitted || isSkipped) return
     setSelectedOption(optionId)
     setIsSubmitted(true)
+    if (navigator.vibrate) {
+      if (optionId === correct) {
+        navigator.vibrate([10, 40, 20])
+      } else {
+        navigator.vibrate([20, 30, 20])
+      }
+    }
   }
 
   const isCorrect = selectedOption === correct

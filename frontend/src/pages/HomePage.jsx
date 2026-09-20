@@ -5,10 +5,13 @@ import AppShell from '../components/layout/AppShell'
 import FreshStartDashboard from '../components/dashboard/FreshStartDashboard'
 import ResumingDashboard from '../components/dashboard/ResumingDashboard'
 import NewSubjectModal from '../components/dashboard/NewSubjectModal'
+import SenseiLoader from '../components/common/SenseiLoader'
 
 export default function HomePage() {
   const [projects, setProjects] = useState([])
   const [activeProjectId, setActiveProjectId] = useState(null)
+  const [initialProgress, setInitialProgress] = useState(null)
+  const [initialChapters, setInitialChapters] = useState([])
   const [loading, setLoading] = useState(true)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [forceFreshStart, setForceFreshStart] = useState(false)
@@ -24,7 +27,18 @@ export default function HomePage() {
       const list = res.data || []
       setProjects(list)
       if (list.length > 0) {
-        setActiveProjectId((prev) => prev || list[0].id)
+        const firstId = list[0].id
+        setActiveProjectId(firstId)
+        try {
+          const [progRes, chapRes] = await Promise.all([
+            api.get(`/progress/${firstId}`).catch(() => ({ data: null })),
+            api.get(`/projects/${firstId}/chapters`).catch(() => ({ data: [] })),
+          ])
+          setInitialProgress(progRes.data)
+          setInitialChapters(Array.isArray(chapRes.data) ? chapRes.data : [])
+        } catch (subErr) {
+          console.error('Failed to pre-fetch active project data', subErr)
+        }
       }
     } catch (err) {
       console.error('Failed to fetch projects', err)
@@ -34,9 +48,9 @@ export default function HomePage() {
   }
 
   // Creates a new project and keeps user ON the dashboard with this new subject selected
-  const handleCreateProject = async (title) => {
+  const handleCreateProject = async (title, difficultyLevel = 'beginner') => {
     try {
-      const res = await api.post('/projects/', { title })
+      const res = await api.post('/projects/', { title, difficulty_level: difficultyLevel })
       const newProj = res.data
       setProjects((prev) => [newProj, ...prev])
       setActiveProjectId(newProj.id)
@@ -90,11 +104,8 @@ export default function HomePage() {
   if (loading) {
     return (
       <AppShell>
-        <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3">
-          <span className="material-symbols-outlined text-3xl text-[#6c8cff] animate-spin">
-            progress_activity
-          </span>
-          <span className="text-xs text-[#9ca3af] font-mono">Loading your calm space...</span>
+        <div className="min-h-[70vh] flex flex-col items-center justify-center">
+          <SenseiLoader size={120} />
         </div>
       </AppShell>
     )
@@ -118,6 +129,8 @@ export default function HomePage() {
         <ResumingDashboard
           projects={projects}
           activeProjectId={activeProjectId}
+          initialChapters={initialChapters}
+          initialProgress={initialProgress}
           onSelectProject={handleSelectTrack}
           onOpenNewModal={() => setIsModalOpen(true)}
           onDeleteProject={handleDeleteProject}

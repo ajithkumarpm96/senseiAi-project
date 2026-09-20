@@ -47,6 +47,29 @@ def get_chat_history(
         query = query.filter(Conversation.chapter_id.is_(None))
 
     conversation = query.first()
+
+    # Smart history migration fallback:
+    # If the user requested Chapter 1 and no conversation exists for it,
+    # check if an unassigned conversation (chapter_id IS NULL) exists and migrate it!
+    if not conversation and chapter_id is not None:
+        first_chapter = (
+            db.query(Chapter)
+            .filter(Chapter.project_id == project_id)
+            .order_by(Chapter.order_num.asc())
+            .first()
+        )
+        if first_chapter and first_chapter.id == chapter_id:
+            unassigned = (
+                db.query(Conversation)
+                .filter(Conversation.project_id == project_id, Conversation.chapter_id.is_(None))
+                .first()
+            )
+            if unassigned:
+                unassigned.chapter_id = chapter_id
+                db.commit()
+                db.refresh(unassigned)
+                conversation = unassigned
+
     if not conversation:
         return []
 
@@ -61,6 +84,7 @@ async def stream_chat(
 ):
     """
     Streams Sensei's teaching responses word-by-word via SSE (Server-Sent Events).
+    Automatically synthesizes a calibrated syllabus upon receiving the first chat if none exists.
     """
     # 1. Cost & Safety Guardrails Check
     try:
@@ -76,12 +100,71 @@ async def stream_chat(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # 3. Fetch or initialize chapter-specific conversation record
+    # 3. Auto-generate syllabus on first chat if project has NO chapters
+    existing_chapter_count = db.query(Chapter).filter(Chapter.project_id == request.project_id).count()
+    generated_chapters_payload = None
+
+    effective_chapter_id = request.chapter_id
+    effective_difficulty = request.difficulty_level or project.difficulty_level or "beginner"
+
+    if existing_chapter_count == 0:
+        from app.agents.tools.chapters import generate_chapters_for_project, clean_chapter_title
+        if request.difficulty_level:
+            project.difficulty_level = request.difficulty_level
+            db.commit()
+
+        curriculum = await generate_chapters_for_project(
+            topic_title=project.title,
+            topic_description=f"{project.description}. User starting prompt: {request.message}",
+            theme=request.theme or current_user.theme or "anime",
+            difficulty_level=effective_difficulty
+        )
+
+        core_titles = [clean_chapter_title(t) for t in curriculum.get("core_chapters", []) if clean_chapter_title(t)]
+        optional_titles = [clean_chapter_title(t) for t in curriculum.get("optional_chapters", []) if clean_chapter_title(t)]
+
+        created_chapters = []
+        for idx, title in enumerate(core_titles, start=1):
+            chap = Chapter(
+                project_id=request.project_id,
+                title=title,
+                order_num=idx,
+                ai_generated=True
+            )
+            db.add(chap)
+            created_chapters.append(chap)
+        db.commit()
+
+        for c in created_chapters:
+            db.refresh(c)
+
+        if created_chapters:
+            effective_chapter_id = created_chapters[0].id
+            from app.api.routes.projects import migrate_unassigned_conversations_to_chapter
+            migrate_unassigned_conversations_to_chapter(request.project_id, effective_chapter_id, db)
+
+            generated_chapters_payload = {
+                "core_chapters": [
+                    {
+                        "id": c.id,
+                        "title": c.title,
+                        "order_num": c.order_num,
+                        "progress": c.progress,
+                        "status": c.status,
+                        "ai_generated": c.ai_generated
+                    }
+                    for c in created_chapters
+                ],
+                "optional_chapters": optional_titles,
+                "selected_chapter_id": effective_chapter_id
+            }
+
+    # 4. Fetch or initialize chapter-specific conversation record
     conv_query = db.query(Conversation).filter(
         Conversation.project_id == request.project_id
     )
-    if request.chapter_id is not None:
-        conv_query = conv_query.filter(Conversation.chapter_id == request.chapter_id)
+    if effective_chapter_id is not None:
+        conv_query = conv_query.filter(Conversation.chapter_id == effective_chapter_id)
     else:
         conv_query = conv_query.filter(Conversation.chapter_id.is_(None))
 
@@ -89,14 +172,14 @@ async def stream_chat(
     if not conversation:
         conversation = Conversation(
             project_id=request.project_id,
-            chapter_id=request.chapter_id,
+            chapter_id=effective_chapter_id,
             mood=request.mood
         )
         db.add(conversation)
         db.commit()
         db.refresh(conversation)
 
-    # 4. Save user message to database
+    # 5. Save user message to database
     user_msg_db = Message(
         conversation_id=conversation.id,
         role="user",
@@ -106,7 +189,7 @@ async def stream_chat(
     db.add(user_msg_db)
     db.commit()
 
-    # 5. Retrieve last 10 messages for conversational context
+    # 6. Retrieve last 10 messages for conversational context
     past_messages = (
         db.query(Message)
         .filter(Message.conversation_id == conversation.id)
@@ -126,8 +209,8 @@ async def stream_chat(
 
     # Resolve chapter title if available
     chapter_title = "General"
-    if request.chapter_id:
-        ch = db.query(Chapter).filter(Chapter.id == request.chapter_id).first()
+    if effective_chapter_id:
+        ch = db.query(Chapter).filter(Chapter.id == effective_chapter_id).first()
         if ch:
             chapter_title = ch.title
 
@@ -144,8 +227,8 @@ async def stream_chat(
         """SSE Generator that streams tokens and tool events directly from LangGraph."""
         full_ai_content = []
         thread_id = (
-            f"user-{user_id}-proj-{request.project_id}-chap-{request.chapter_id}"
-            if request.chapter_id
+            f"user-{user_id}-proj-{request.project_id}-chap-{effective_chapter_id}"
+            if effective_chapter_id
             else f"user-{user_id}-proj-{request.project_id}-general"
         )
         config = {"configurable": {"thread_id": thread_id}}
@@ -157,14 +240,20 @@ async def stream_chat(
             "mood": request.mood,
             "theme": theme,
             "study_mode": study_mode,
+            "difficulty_level": effective_difficulty,
             "target_agent": request.target_agent
         }
 
         current_agent_type = "sensei"
 
         try:
-            # Emit initial thinking step
-            yield f"data: {json.dumps({'type': 'step', 'step': 'Analyzing your question & study context...'})}\n\n"
+            # If syllabus was just auto-generated, broadcast it to the client immediately!
+            if generated_chapters_payload:
+                yield f"data: {json.dumps({'type': 'syllabus_generated', **generated_chapters_payload})}\n\n"
+                first_ch_title = generated_chapters_payload['core_chapters'][0]['title']
+                yield f"data: {json.dumps({'type': 'step', 'step': f'Syllabus ready! Activated Chapter 1: {first_ch_title}'})}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'step', 'step': 'Analyzing your question & study context...'})}\n\n"
 
             # Stream tokens and tool calling events from LangGraph
             async for event in study_graph.astream_events(graph_input, config=config, version="v2"):
