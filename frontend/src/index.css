@@ -15,6 +15,38 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-headline), sans-serif;
 }
 
+/* 
+  Universal Interactive Pointer Cursor:
+  Tailwind v4 reset defaults buttons to cursor: default.
+  This ensures all interactive UI elements always display a clear hand pointer cursor.
+*/
+button,
+[role="button"],
+[type="button"],
+[type="reset"],
+[type="submit"],
+a,
+summary,
+select,
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"],
+label[for],
+.cursor-pointer,
+[tabindex]:not([tabindex="-1"]) {
+  cursor: pointer !important;
+}
+
+/* Disabled states should clearly show not-allowed */
+button:disabled,
+[type="button"]:disabled,
+[type="submit"]:disabled,
+[type="reset"]:disabled,
+[aria-disabled="true"],
+.disabled {
+  cursor: not-allowed !important;
+}
+
 /* Custom scrollbar for the chat window */
 .chat-scroll::-webkit-scrollbar { width: 4px; }
 .chat-scroll::-webkit-scrollbar-track { background: transparent; }

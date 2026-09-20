@@ -9,16 +9,19 @@ export default function TopHeader() {
     logout, 
     dyslexicFont, 
     toggleDyslexicFont,
-    textScale,
+    textScale, 
     toggleTextScale,
-    softView,
+    softView, 
     toggleSoftView,
-    bionicReading,
+    bionicReading, 
     toggleBionicReading
   } = useAppStore()
 
   const [isScrolled, setIsScrolled] = useState(false)
-  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false)
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+
+  // Count how many sensory adaptations are currently enabled
+  const activeSensoryCount = [dyslexicFont, textScale === 'large', softView, bionicReading].filter(Boolean).length
 
   // Detect scroll to morph header into a floating semi-transparent pill on mobile
   useEffect(() => {
@@ -28,6 +31,17 @@ export default function TopHeader() {
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  // Close drawer on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isDrawerOpen) {
+        setIsDrawerOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isDrawerOpen])
 
   return (
     <>
@@ -40,11 +54,12 @@ export default function TopHeader() {
           }
         `}
       >
-        {/* Brand & Status */}
+        {/* Brand & Status - Clean and minimal across all screen sizes */}
         <div className="flex items-center gap-2 sm:gap-3">
           <div 
             onClick={() => navigate('/')} 
             className="flex items-center gap-2 cursor-pointer group shrink-0"
+            title="Sensei AI Home"
           >
             {/* Calm Beacon Logo */}
             <div className={`rounded-lg bg-[#1f2229] border border-[#2f343d] flex items-center justify-center text-[#6c8cff] group-hover:border-[#6c8cff]/50 transition-all ${
@@ -67,123 +82,18 @@ export default function TopHeader() {
               />
             </div>
           </div>
-
-          {/* Calm Mode pill (Desktop) */}
-          <div className="hidden md:flex items-center gap-2 bg-[#1f2229] border border-[#2f343d] px-3 py-1 rounded-full text-xs text-[#9ca3af]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#5fd38d] animate-pulse" />
-            <span>Calm Mode Active</span>
-          </div>
         </div>
 
-        {/* Desktop Accessibility Controls & Profile */}
-        <div className="hidden md:flex items-center gap-2 sm:gap-3">
-          {/* Sensory Toolbar */}
-          <div className="flex items-center bg-[#1a1b21] border border-[#2f343d] px-1.5 py-1 rounded-xl gap-1">
-            {/* Dyslexia-friendly Font Switcher */}
-            <button
-              type="button"
-              onClick={toggleDyslexicFont}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium transition-all ${
-                dyslexicFont 
-                  ? 'bg-[#6c8cff] text-[#001e60] shadow-sm font-semibold' 
-                  : 'text-[#9ca3af] hover:text-[#f1f4fa] hover:bg-[#1f2229]'
-              }`}
-              title="Toggle OpenDyslexic accessible font"
-            >
-              <span className="material-symbols-outlined text-[16px]">spellcheck</span>
-              <span className="hidden sm:inline">Dyslexia</span>
-            </button>
-
-            <div className="h-4 w-px bg-[#2f343d]" />
-
-            {/* Text Size Scale */}
-            <button
-              type="button"
-              onClick={toggleTextScale}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all ${
-                textScale === 'large'
-                  ? 'bg-[#6c8cff]/20 text-[#6c8cff] border border-[#6c8cff]/40'
-                  : 'text-[#9ca3af] hover:text-[#f1f4fa] hover:bg-[#1f2229]'
-              }`}
-              title="Adjust Text Scale"
-            >
-              <span className="material-symbols-outlined text-[16px]">format_size</span>
-              <span className="hidden sm:inline">Scale</span>
-            </button>
-
-            <div className="h-4 w-px bg-[#2f343d]" />
-
-            {/* Soft View (Low Contrast) */}
-            <button
-              type="button"
-              onClick={toggleSoftView}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all ${
-                softView
-                  ? 'bg-[#f8bc61]/20 text-[#f8bc61] border border-[#f8bc61]/40'
-                  : 'text-[#9ca3af] hover:text-[#f1f4fa] hover:bg-[#1f2229]'
-              }`}
-              title="Soft Low-Contrast View"
-            >
-              <span className="material-symbols-outlined text-[16px]">contrast</span>
-              <span className="hidden sm:inline">Soft</span>
-            </button>
-
-            <div className="h-4 w-px bg-[#2f343d]" />
-
-            {/* Bionic Reading */}
-            <button
-              type="button"
-              onClick={toggleBionicReading}
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all ${
-                bionicReading
-                  ? 'bg-[#6c8cff]/20 text-[#6c8cff] border border-[#6c8cff]/40'
-                  : 'text-[#9ca3af] hover:text-[#f1f4fa] hover:bg-[#1f2229]'
-              }`}
-              title="Bionic Reading (Bold First Letters)"
-            >
-              <span className="material-symbols-outlined text-[16px]">auto_stories</span>
-              <span className="hidden sm:inline">Bionic</span>
-            </button>
-          </div>
-
-          {/* User Avatar & Logout */}
-          <div className="flex items-center gap-2 pl-1">
-            <button
-              onClick={() => navigate('/admin')}
-              className="hidden sm:flex text-xs text-[#9ca3af] hover:text-[#e8eaed] px-2 py-1.5 rounded-lg hover:bg-[#1f2229] transition-colors"
-              title="Usage & Analytics"
-            >
-              Admin
-            </button>
-            
-            <div 
-              className="w-8 h-8 rounded-full bg-[#6c8cff] text-[#001e60] font-semibold text-xs flex items-center justify-center shadow-sm select-none"
-              title={`Logged in as ${user?.username || 'User'}`}
-            >
-              {user?.username ? user.username.charAt(0).toUpperCase() : <span className="material-symbols-outlined text-[18px]">person</span>}
-            </div>
-
-            <button
-              onClick={logout}
-              className="text-xs text-[#ffb4ab]/80 hover:text-[#ffb4ab] px-2 py-1.5 rounded-lg hover:bg-[#93000a]/20 transition-colors"
-              title="Log out"
-            >
-              <span className="material-symbols-outlined text-[18px] sm:hidden">logout</span>
-              <span className="hidden sm:inline">Logout</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Profile Icon Only (Clicking opens sidebar drawer) */}
-        <div className="flex md:hidden items-center">
+        {/* Clean Controls - Single unified avatar trigger */}
+        <div className="flex items-center">
           <button
             type="button"
-            onClick={() => setIsMobileDrawerOpen(true)}
-            className="rounded-full focus:outline-none focus:ring-2 focus:ring-[#6c8cff]/50 transition-transform active:scale-95"
-            title="Open Profile & Menu"
+            onClick={() => setIsDrawerOpen(true)}
+            className="flex items-center p-0.5 rounded-full hover:ring-2 hover:ring-[#6c8cff]/50 transition-all focus:outline-none active:scale-95 cursor-pointer"
+            title={`Account & Sensory Settings (${user?.username || 'Learner'})`}
           >
             <div 
-              className={`rounded-full bg-[#6c8cff] text-[#001e60] font-semibold flex items-center justify-center shadow-sm select-none transition-all ${
+              className={`rounded-full bg-[#6c8cff] text-[#001e60] font-bold flex items-center justify-center shadow-sm select-none transition-all ${
                 isScrolled ? 'w-7 h-7 text-xs' : 'w-8 h-8 text-xs'
               }`}
             >
@@ -193,21 +103,21 @@ export default function TopHeader() {
         </div>
       </header>
 
-      {/* Mobile Drawer Backdrop */}
+      {/* Drawer Backdrop Overlay */}
       <div
-        className={`fixed inset-0 bg-black/60 backdrop-blur-xs z-50 md:hidden transition-opacity duration-300 ease-in-out ${
-          isMobileDrawerOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        className={`fixed inset-0 bg-black/60 backdrop-blur-xs z-50 transition-opacity duration-300 ease-in-out ${
+          isDrawerOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => setIsMobileDrawerOpen(false)}
+        onClick={() => setIsDrawerOpen(false)}
       />
 
-      {/* Mobile Sliding Sidebar Drawer */}
+      {/* Sliding Sensory & Settings Drawer (Cleanly works on Desktop and Mobile) */}
       <div
         className={`
-          fixed inset-y-0 right-0 z-50 md:hidden
-          w-80 max-w-[85vw] bg-[#16181d] border-l border-[#2f343d] shadow-2xl flex flex-col justify-between
+          fixed inset-y-0 right-0 z-50
+          w-80 sm:w-96 max-w-[90vw] bg-[#16181d] border-l border-[#2f343d] shadow-2xl flex flex-col justify-between
           transition-transform duration-300 ease-in-out select-none
-          ${isMobileDrawerOpen ? 'translate-x-0' : 'translate-x-full'}
+          ${isDrawerOpen ? 'translate-x-0' : 'translate-x-full'}
         `}
       >
         {/* Drawer Header: User Profile */}
@@ -228,7 +138,7 @@ export default function TopHeader() {
           </div>
           <button
             type="button"
-            onClick={() => setIsMobileDrawerOpen(false)}
+            onClick={() => setIsDrawerOpen(false)}
             className="p-1.5 rounded-lg text-[#9ca3af] hover:text-[#f1f4fa] hover:bg-[#1f2229] transition-colors"
             title="Close menu"
           >
@@ -238,22 +148,105 @@ export default function TopHeader() {
 
         {/* Drawer Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-5">
-          {/* Navigation (Moved from Bottom Nav) */}
+          {/* Sensory & Accessibility Controls */}
+          <div>
+            <div className="flex items-center justify-between mb-2 px-1">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-[#9ca3af]/80 font-semibold">
+                Sensory & Accessibility
+              </span>
+              {activeSensoryCount > 0 && (
+                <span className="text-[10px] font-mono text-[#6c8cff] font-medium">
+                  {activeSensoryCount} Active
+                </span>
+              )}
+            </div>
+            <div className="space-y-2">
+              {/* Dyslexia Font */}
+              <button
+                type="button"
+                onClick={toggleDyslexicFont}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all border ${
+                  dyslexicFont 
+                    ? 'bg-[#6c8cff]/15 border-[#6c8cff]/40 text-[#6c8cff]' 
+                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af] hover:border-[#6c8cff]/30'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="material-symbols-outlined text-[18px]">spellcheck</span>
+                  <span className="font-medium">OpenDyslexic Font</span>
+                </div>
+                <span className="font-mono text-[11px] font-semibold">{dyslexicFont ? 'ON' : 'OFF'}</span>
+              </button>
+
+              {/* Bionic Reading */}
+              <button
+                type="button"
+                onClick={toggleBionicReading}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all border ${
+                  bionicReading
+                    ? 'bg-[#6c8cff]/15 border-[#6c8cff]/40 text-[#6c8cff]'
+                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af] hover:border-[#6c8cff]/30'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="material-symbols-outlined text-[18px]">auto_stories</span>
+                  <span className="font-medium">Bionic Reading</span>
+                </div>
+                <span className="font-mono text-[11px] font-semibold">{bionicReading ? 'ON' : 'OFF'}</span>
+              </button>
+
+              {/* Soft View */}
+              <button
+                type="button"
+                onClick={toggleSoftView}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all border ${
+                  softView
+                    ? 'bg-[#f8bc61]/15 border-[#f8bc61]/40 text-[#f8bc61]'
+                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af] hover:border-[#f8bc61]/30'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="material-symbols-outlined text-[18px]">contrast</span>
+                  <span className="font-medium">Soft View (Low Contrast)</span>
+                </div>
+                <span className="font-mono text-[11px] font-semibold">{softView ? 'ON' : 'OFF'}</span>
+              </button>
+
+              {/* Text Size Scale */}
+              <button
+                type="button"
+                onClick={toggleTextScale}
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all border ${
+                  textScale === 'large'
+                    ? 'bg-[#6c8cff]/15 border-[#6c8cff]/40 text-[#6c8cff]'
+                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af] hover:border-[#6c8cff]/30'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="material-symbols-outlined text-[18px]">format_size</span>
+                  <span className="font-medium">Text Scale</span>
+                </div>
+                <span className="font-mono text-[11px] font-semibold">{textScale === 'large' ? 'Large (110%)' : 'Normal'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Navigation & Workspace Links */}
           <div>
             <div className="text-[10px] font-mono uppercase tracking-wider text-[#9ca3af]/80 font-semibold mb-2 px-1">
-              Navigation
+              Workspace & Navigation
             </div>
             <div className="space-y-1">
               {[
-                { label: "Today's Focus", icon: 'calendar_today', path: '/' },
-                { label: 'Technical Paths', icon: 'route', path: '/paths' },
-                { label: 'Gentle Progress', icon: 'insights', path: '/progress' },
+                { label: "Today's Focus", icon: 'self_improvement', path: '/' },
+                { label: 'Technical Paths', icon: 'account_tree', path: '/paths' },
+                { label: 'Gentle Progress', icon: 'spa', path: '/progress' },
                 { label: 'Settings & Admin', icon: 'settings', path: '/admin' },
               ].map((item) => (
                 <button
                   key={item.label}
                   onClick={() => {
-                    setIsMobileDrawerOpen(false)
+                    setIsDrawerOpen(false)
                     navigate(item.path)
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium text-[#c8cdd8] hover:text-[#f1f4fa] hover:bg-[#1f2229] transition-colors text-left"
@@ -264,82 +257,6 @@ export default function TopHeader() {
               ))}
             </div>
           </div>
-
-          {/* Sensory & Accessibility Controls (Moved from Top Header) */}
-          <div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[#9ca3af]/80 font-semibold mb-2 px-1">
-              Sensory & Accessibility
-            </div>
-            <div className="space-y-2">
-              {/* Dyslexia Font */}
-              <button
-                type="button"
-                onClick={toggleDyslexicFont}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all border ${
-                  dyslexicFont 
-                    ? 'bg-[#6c8cff]/15 border-[#6c8cff]/40 text-[#6c8cff]' 
-                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="material-symbols-outlined text-[18px]">spellcheck</span>
-                  <span className="font-medium">OpenDyslexic Font</span>
-                </div>
-                <span className="font-mono text-[11px] font-semibold">{dyslexicFont ? 'ON' : 'OFF'}</span>
-              </button>
-
-              {/* Text Size Scale */}
-              <button
-                type="button"
-                onClick={toggleTextScale}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all border ${
-                  textScale === 'large'
-                    ? 'bg-[#6c8cff]/15 border-[#6c8cff]/40 text-[#6c8cff]'
-                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="material-symbols-outlined text-[18px]">format_size</span>
-                  <span className="font-medium">Text Scale</span>
-                </div>
-                <span className="font-mono text-[11px] font-semibold">{textScale === 'large' ? 'Large (110%)' : 'Normal'}</span>
-              </button>
-
-              {/* Soft View */}
-              <button
-                type="button"
-                onClick={toggleSoftView}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all border ${
-                  softView
-                    ? 'bg-[#f8bc61]/15 border-[#f8bc61]/40 text-[#f8bc61]'
-                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="material-symbols-outlined text-[18px]">contrast</span>
-                  <span className="font-medium">Soft View (Low Contrast)</span>
-                </div>
-                <span className="font-mono text-[11px] font-semibold">{softView ? 'ON' : 'OFF'}</span>
-              </button>
-
-              {/* Bionic Reading */}
-              <button
-                type="button"
-                onClick={toggleBionicReading}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs transition-all border ${
-                  bionicReading
-                    ? 'bg-[#6c8cff]/15 border-[#6c8cff]/40 text-[#6c8cff]'
-                    : 'bg-[#1a1b21] border-[#2f343d] text-[#9ca3af]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="material-symbols-outlined text-[18px]">auto_stories</span>
-                  <span className="font-medium">Bionic Reading</span>
-                </div>
-                <span className="font-mono text-[11px] font-semibold">{bionicReading ? 'ON' : 'OFF'}</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Drawer Footer: Sign Out */}
@@ -347,10 +264,10 @@ export default function TopHeader() {
           <button
             type="button"
             onClick={() => {
-              setIsMobileDrawerOpen(false)
+              setIsDrawerOpen(false)
               logout()
             }}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold text-[#ffb4ab] hover:text-[#ffdad6] bg-[#93000a]/20 hover:bg-[#93000a]/35 border border-[#ffb4ab]/30 transition-all"
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold text-[#ffb4ab] hover:text-[#ffdad6] bg-[#93000a]/20 hover:bg-[#93000a]/35 border border-[#ffb4ab]/30 transition-all cursor-pointer"
           >
             <span className="material-symbols-outlined text-[18px]">logout</span>
             <span>Sign Out</span>

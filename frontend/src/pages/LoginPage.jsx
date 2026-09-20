@@ -67,7 +67,7 @@ export default function LoginPage() {
             </span>
             <span
               className="w-2 h-2 rounded-full bg-[#5fd38d] shadow-[0_0_8px_rgba(95,211,141,0.5)]"
-              title="Calm Focus Active"
+              title="Active"
             />
           </div>
         </div>
@@ -112,7 +112,7 @@ export default function LoginPage() {
                   : 'text-[#939aa8] hover:text-[#dee3ec]'
               }`}
             >
-              Create Account
+              Sign Up
             </button>
           </div>
 
@@ -137,7 +137,7 @@ export default function LoginPage() {
                   spellCheck="false"
                   /* text-base on mobile prevents iOS Safari automatic viewport zooming */
                   className="w-full h-12 bg-[#161920] border border-[#2f343d] focus:border-[#6c8cff] focus:ring-1 focus:ring-[#6c8cff] rounded-xl pl-10 pr-4 text-base sm:text-sm text-[#c8cdd8] placeholder-[#939aa8]/50 outline-none transition-all font-mono"
-                  placeholder="e.g. learner_luffy"
+                  placeholder="Enter your username"
                   required
                 />
               </div>
@@ -204,7 +204,7 @@ export default function LoginPage() {
                 </span>
               ) : (
                 <>
-                  <span>{isRegister ? 'Create Account' : 'Enter Calm Space'}</span>
+                  <span>{isRegister ? 'Sign Up' : 'Sign In'}</span>
                   <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </>
               )}
